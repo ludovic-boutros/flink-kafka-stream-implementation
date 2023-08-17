@@ -9,6 +9,7 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.datastream.KeyedStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.lboutros.traveloptimizer.flink.datagen.DataGeneratorJob;
 import org.lboutros.traveloptimizer.flink.jobs.internalmodels.UnionEnvelope;
 import org.lboutros.traveloptimizer.flink.processfunctions.OptimizerFunction;
 import org.lboutros.traveloptimizer.model.CustomerTravelRequest;
@@ -32,21 +33,21 @@ public class TravelOptimizerJob {
                 .setProperties(consumerConfig)
                 .setTopics("planeTimeUpdated")
                 .setStartingOffsets(OffsetsInitializer.latest())
-                .setValueOnlyDeserializer(new JsonDeserializationSchema<>(PlaneTimeTableUpdate.class))
+                .setValueOnlyDeserializer(new JsonDeserializationSchema<>(PlaneTimeTableUpdate.class, DataGeneratorJob::getMapper))
                 .build();
 
         KafkaSource<TrainTimeTableUpdate> trainKafkaSource = KafkaSource.<TrainTimeTableUpdate>builder()
                 .setProperties(consumerConfig)
                 .setTopics("trainTimeUpdated")
                 .setStartingOffsets(OffsetsInitializer.latest())
-                .setValueOnlyDeserializer(new JsonDeserializationSchema<>(TrainTimeTableUpdate.class))
+                .setValueOnlyDeserializer(new JsonDeserializationSchema<>(TrainTimeTableUpdate.class, DataGeneratorJob::getMapper))
                 .build();
 
         KafkaSource<CustomerTravelRequest> requestKafkaSource = KafkaSource.<CustomerTravelRequest>builder()
                 .setProperties(consumerConfig)
                 .setTopics("customerTravelRequested")
                 .setStartingOffsets(OffsetsInitializer.latest())
-                .setValueOnlyDeserializer(new JsonDeserializationSchema<>(CustomerTravelRequest.class))
+                .setValueOnlyDeserializer(new JsonDeserializationSchema<>(CustomerTravelRequest.class, DataGeneratorJob::getMapper))
                 .build();
 
         DataStreamSource<PlaneTimeTableUpdate> planeStreamSource =

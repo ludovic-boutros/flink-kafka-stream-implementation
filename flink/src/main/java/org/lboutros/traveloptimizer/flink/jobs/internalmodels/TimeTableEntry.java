@@ -1,9 +1,6 @@
 package org.lboutros.traveloptimizer.flink.jobs.internalmodels;
 
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import org.lboutros.traveloptimizer.model.PlaneTimeTableUpdate;
 import org.lboutros.traveloptimizer.model.TrainTimeTableUpdate;
 
@@ -13,6 +10,7 @@ import java.time.ZonedDateTime;
 @Getter
 @Setter
 @NoArgsConstructor
+@ToString
 public class TimeTableEntry implements Comparable<TimeTableEntry> {
     private String id;
     private String customerTravelRequest;

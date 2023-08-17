@@ -1,9 +1,6 @@
 package org.lboutros.traveloptimizer.model;
 
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 
 import java.time.ZonedDateTime;
 
@@ -11,6 +8,7 @@ import java.time.ZonedDateTime;
 @Getter
 @Setter
 @NoArgsConstructor
+@ToString
 public class TrainTimeTableUpdate {
     private String id;
     private String departureLocation;

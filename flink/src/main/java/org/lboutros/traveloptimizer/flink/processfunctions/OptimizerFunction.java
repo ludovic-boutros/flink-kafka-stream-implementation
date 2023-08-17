@@ -11,7 +11,10 @@ import org.lboutros.traveloptimizer.flink.jobs.internalmodels.TimeTableMap;
 import org.lboutros.traveloptimizer.flink.jobs.internalmodels.UnionEnvelope;
 import org.lboutros.traveloptimizer.model.TravelAlert;
 
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.List;
+import java.util.function.Supplier;
 
 
 public class OptimizerFunction extends KeyedProcessFunction<String, UnionEnvelope, TravelAlert> {
@@ -45,91 +48,80 @@ public class OptimizerFunction extends KeyedProcessFunction<String, UnionEnvelop
 
         var storageKey = value.getPartitionKey();
 
-        // If it's a request
-        if (value.getCustomerTravelRequest() != null) {
-
-            var request = value.getCustomerTravelRequest();
-
-            // Lookup for matching timetable entry using partition key 'prefix scan' : WE NEED A LIST MODEL
-            var timeTableMap = timeTableState.get(storageKey);
-
-            if (timeTableMap == null) {
-                timeTableMap = new TimeTableMap();
-            }
-
-            // Apply business rules
-
-            var newTravelAlert = TravelAlert.fromRequest(request);
-            var optimalTravel = getOptimalTravel(timeTableMap);
-
-            if (optimalTravel != null) {
-
-                updateAlert(newTravelAlert, optimalTravel);
-
-                var targetAlertMap = requestState.get(optimalTravel.getId());
-
-                if (targetAlertMap == null) {
-                    targetAlertMap = new AlertMap();
-                }
-                targetAlertMap.put(newTravelAlert.getId(), newTravelAlert);
-                // Store the result
-                requestState.put(optimalTravel.getId(), targetAlertMap);
-
-                // Forward the result
-                out.collect(newTravelAlert);
-            }
-
+        if (value.isCustomerTravelRequest()) {
+            processCustomerTravelRequest(value, out, requestState, timeTableState, storageKey);
         } else {
-            TimeTableEntry timeUpdate = TimeTableEntry.fromUpdate(value);
-            var timeTableMap = timeTableState.get(storageKey);
+            processTimeTableUpdate(value, out, requestState, timeTableState, storageKey);
+        }
+    }
 
-            if (timeTableMap == null) {
-                timeTableMap = new TimeTableMap();
-            }
+    private <T> T getOrCreateStatestoreEntry(MapState<String, T> state, String key, Supplier<T> creator) throws Exception {
+        T retValue = state.get(key);
+        if (retValue == null) {
+            retValue = creator.get();
+        }
+        return retValue;
+    }
 
-            // Upsert the new timetable entry
-            timeTableMap.put(timeUpdate.getId(), timeUpdate);
+    private void processTimeTableUpdate(UnionEnvelope value, Collector<TravelAlert> out, MapState<String, AlertMap> requestState, MapState<String, TimeTableMap> timeTableState, String storageKey) throws Exception {
+        TimeTableEntry timeUpdate = TimeTableEntry.fromUpdate(value);
+        var timeTableMap = getOrCreateStatestoreEntry(timeTableState, storageKey, TimeTableMap::new);
 
-            var currentAlertMap = requestState.get(timeUpdate.getId());
+        // Upsert the new timetable entry
+        timeTableMap.put(timeUpdate.getId(), timeUpdate);
 
-            if (currentAlertMap == null) {
-                currentAlertMap = new AlertMap();
-            }
+        var currentAlertMap = getOrCreateStatestoreEntry(requestState, timeUpdate.getId(), AlertMap::new);
 
+        List<String> elementToRemove = new ArrayList<>();
 
-            for (TravelAlert travelAlert : currentAlertMap.values()) {
-                // Apply business rules
+        for (TravelAlert travelAlert : currentAlertMap.values()) {
+            // Apply business rules
+            var newOptimal = getOptimalTravel(timeTableMap);
 
-                var newOptimal = getOptimalTravel(timeTableMap);
+            // Update Request Store
+            updateAlert(travelAlert, newOptimal);
 
-                // Update Request Store
-                if (!newOptimal.getId().equals(timeUpdate.getId())) {
+            // Remove from the old alert map (old optimal)
+            elementToRemove.add(travelAlert.getId());
+            // Update the new alert Map (new optimal)
+            var newAlertMap = getOrCreateStatestoreEntry(requestState, newOptimal.getId(), AlertMap::new);
 
-                    updateAlert(travelAlert, newOptimal);
+            newAlertMap.put(travelAlert.getId(), travelAlert);
 
-                    // Remove from the old alert map (old optimal)
-                    currentAlertMap.remove(travelAlert.getId());
-                    // Update the new alert Map (new optimal)
-                    var newAlertMap = requestState.get(newOptimal.getId());
+            // Update Stores
+            requestState.put(newOptimal.getId(), newAlertMap);
 
-                    if (newAlertMap == null) {
-                        newAlertMap = new AlertMap();
-                    }
+            // Collect
+            out.collect(travelAlert); // the new alert
+        }
 
-                    newAlertMap.put(travelAlert.getId(), travelAlert);
+        elementToRemove.forEach(currentAlertMap::remove);
+        requestState.put(timeUpdate.getId(), currentAlertMap);
 
-                    // Update Stores
-                    requestState.put(newOptimal.getId(), newAlertMap);
-                    requestState.put(travelAlert.getId(), currentAlertMap);
+        timeTableState.put(storageKey, timeTableMap);
+    }
 
-                    // Collect
-                    out.collect(travelAlert); // the new alert
-                }
+    private void processCustomerTravelRequest(UnionEnvelope value, Collector<TravelAlert> out, MapState<String, AlertMap> requestState, MapState<String, TimeTableMap> timeTableState, String storageKey) throws Exception {
+        var request = value.getCustomerTravelRequest();
 
-            }
+        // Lookup for matching timetable entry using partition key 'prefix scan' : WE NEED A LIST MODEL
+        var timeTableMap = getOrCreateStatestoreEntry(timeTableState, storageKey, TimeTableMap::new);
 
-            timeTableState.put(storageKey, timeTableMap);
+        // Apply business rules
+        var newTravelAlert = TravelAlert.fromRequest(request);
+        var optimalTravel = getOptimalTravel(timeTableMap);
 
+        if (optimalTravel != null) {
+            updateAlert(newTravelAlert, optimalTravel);
+
+            var targetAlertMap = getOrCreateStatestoreEntry(requestState, optimalTravel.getId(), AlertMap::new);
+
+            targetAlertMap.put(newTravelAlert.getId(), newTravelAlert);
+            // Store the result
+            requestState.put(optimalTravel.getId(), targetAlertMap);
+
+            // Forward the result
+            out.collect(newTravelAlert);
         }
     }
 
@@ -137,6 +129,8 @@ public class OptimizerFunction extends KeyedProcessFunction<String, UnionEnvelop
 
         alert.setArrivalTime(newOptimal.getArrivalTime());
         alert.setDepartureTime(newOptimal.getDepartureTime());
+        alert.setLastTravelId(alert.getTravelId());
+        alert.setTravelId(newOptimal.getId());
 
         return alert;
     }
@@ -149,11 +143,8 @@ public class OptimizerFunction extends KeyedProcessFunction<String, UnionEnvelop
         }
 
         var result = availableTravel.values().stream().min(Comparator.comparing(TimeTableEntry::getArrivalTime));
-        if (result.isEmpty()) {
-            return null;
-        }
 
-        return result.get();
+        return result.orElse(null);
     }
 
 }

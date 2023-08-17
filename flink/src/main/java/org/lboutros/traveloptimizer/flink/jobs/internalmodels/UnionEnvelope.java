@@ -1,9 +1,6 @@
 package org.lboutros.traveloptimizer.flink.jobs.internalmodels;
 
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import org.lboutros.traveloptimizer.model.CustomerTravelRequest;
 import org.lboutros.traveloptimizer.model.PlaneTimeTableUpdate;
 import org.lboutros.traveloptimizer.model.TrainTimeTableUpdate;
@@ -12,6 +9,7 @@ import org.lboutros.traveloptimizer.model.TrainTimeTableUpdate;
 @Getter
 @Setter
 @NoArgsConstructor
+@ToString
 public class UnionEnvelope {
     private String partitionKey;
     private CustomerTravelRequest customerTravelRequest;
@@ -42,4 +40,7 @@ public class UnionEnvelope {
         return envelope;
     }
 
+    public boolean isCustomerTravelRequest() {
+        return customerTravelRequest != null;
+    }
 }

@@ -51,7 +51,7 @@ public class DataGeneratorJob {
                 new DataGeneratorSource<>(
                         index -> DataGenerator.generateCustomerTravelRequestData(),
                         Long.MAX_VALUE,
-                        RateLimiterStrategy.perSecond(1),
+                        RateLimiterStrategy.perSecond(0.1),
                         Types.POJO(CustomerTravelRequest.class)
                 );
 
@@ -115,7 +115,7 @@ public class DataGeneratorJob {
         env.execute("InputStreams");
     }
 
-    private static ObjectMapper getMapper() {
+    public static ObjectMapper getMapper() {
         return new ObjectMapper().registerModule(new JavaTimeModule());
     }
 }
