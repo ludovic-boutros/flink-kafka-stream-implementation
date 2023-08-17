@@ -15,7 +15,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class DataGenerator {
-    public static final int MAX_AIRPORT_COUNT = 4;
+    public static final int MAX_AIRPORT_COUNT = 1;
     private static final Random RANDOM = new Random(System.currentTimeMillis());
     private static final List<String> USERS = Stream
             .generate(() -> generateString(5) + "@email.com")
@@ -119,7 +119,7 @@ public class DataGenerator {
         customerTravelRequest.setId(UUID.randomUUID().toString());
         customerTravelRequest.setDepartureLocation(departureLocation);
         customerTravelRequest.setArrivalLocation(arrivalLocation);
-        
+
         return customerTravelRequest;
     }
 }

@@ -9,7 +9,7 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.datastream.KeyedStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.lboutros.traveloptimizer.flink.datagen.DataGeneratorJob;
+import org.lboutros.traveloptimizer.flink.jobs.internalmodels.UnionEnvelope;
 import org.lboutros.traveloptimizer.flink.processfunctions.OptimizerFunction;
 import org.lboutros.traveloptimizer.model.CustomerTravelRequest;
 import org.lboutros.traveloptimizer.model.PlaneTimeTableUpdate;
@@ -24,7 +24,7 @@ public class TravelOptimizerJob {
         StreamExecutionEnvironment environment = StreamExecutionEnvironment.getExecutionEnvironment();
 
         Properties consumerConfig = new Properties();
-        try (InputStream stream = DataGeneratorJob.class.getClassLoader().getResourceAsStream("consumer.properties")) {
+        try (InputStream stream = TravelOptimizerJob.class.getClassLoader().getResourceAsStream("consumer.properties")) {
             consumerConfig.load(stream);
         }
 
@@ -63,9 +63,9 @@ public class TravelOptimizerJob {
         environment.execute("TravelOptimizer");
     }
 
-    private static DataStream<TravelAlert> defineWorkflow(DataStreamSource<PlaneTimeTableUpdate> planeStreamSource,
-                                                          DataStreamSource<TrainTimeTableUpdate> trainStreamSource,
-                                                          DataStreamSource<CustomerTravelRequest> requestStreamSource) {
+    public static DataStream<TravelAlert> defineWorkflow(DataStream<PlaneTimeTableUpdate> planeStreamSource,
+                                                         DataStream<TrainTimeTableUpdate> trainStreamSource,
+                                                         DataStream<CustomerTravelRequest> requestStreamSource) {
 
         DataStream<UnionEnvelope> planeByLinkStream = planeStreamSource.map(UnionEnvelope::fromPlaneTimeTableUpdate);
         DataStream<UnionEnvelope> trainByLinkStream = trainStreamSource.map(UnionEnvelope::fromTrainTimeTableUpdate);

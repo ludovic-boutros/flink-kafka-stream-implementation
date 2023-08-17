@@ -1,4 +1,4 @@
-package org.lboutros.traveloptimizer.flink.jobs;
+package org.lboutros.traveloptimizer.flink.jobs.internalmodels;
 
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
