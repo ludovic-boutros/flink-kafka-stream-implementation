@@ -1,6 +1,6 @@
 # flink-kafka-stream-implementation
 
-This project aims to demonstrate the key differences between Apache Flink® DataStream API & Apache Kafka® Stream
+This project aims to demonstrate the key differences between Apache Flink® DataStream API & Apache Kafka® Streams
 Processor API.
 
 ## License notes
@@ -11,7 +11,7 @@ Please note that, due to missing ZonedDateTime serialization in Apache Flink® K
 reused
 some existing serializer implementation from
 the official project.
-You'll find the detailed licence requirements in the project root. It will be removed as soon as the Apache Flink® is
+You'll find the detailed license requirements in the project root. It will be removed as soon as the Apache Flink® is
 Updated ([FLIP-317](https://cwiki.apache.org/confluence/display/FLINK/FLIP-317%3A+Upgrade+Kryo+from+2.24.0+to+5.5.0))
 
 ## The objective
@@ -51,14 +51,16 @@ We want to manage all those scenarios :
 ### Public / Business Data models
 
 **DISCLAIMER** :
-We consciously chose to split Train & Plane timetable update to challenge N-Ary capabilities of reconciliation of both
+We consciously chose to split Train & Plane timetable updates to challenge N-Ary reconciliation capabilities of both
 technologies.
-We are aware that all of this could have been simplified by merging thoses two events in one.
+We are aware that all of this could have been simplified by merging those two events in one.
 
-[CustomerTravelRequest](models/src/main/java/org/lboutros/traveloptimizer/model/CustomerTravelRequest.java)
-[PlaneTimeTableUpdate](models/src/main/java/org/lboutros/traveloptimizer/model/PlaneTimeTableUpdate.java)
-[TrainTimeTableUpdate](models/src/main/java/org/lboutros/traveloptimizer/model/TrainTimeTableUpdate.java)
-[TravelAlert](models/src/main/java/org/lboutros/traveloptimizer/model/TravelAlert.java)
+The current implementation of "most efficient" is currently : the available connection that will arrive the sooner.
+
+- [CustomerTravelRequest](models/src/main/java/org/lboutros/traveloptimizer/model/CustomerTravelRequest.java)
+- [PlaneTimeTableUpdate](models/src/main/java/org/lboutros/traveloptimizer/model/PlaneTimeTableUpdate.java)
+- [TrainTimeTableUpdate](models/src/main/java/org/lboutros/traveloptimizer/model/TrainTimeTableUpdate.java)
+- [TravelAlert](models/src/main/java/org/lboutros/traveloptimizer/model/TravelAlert.java)
 
 ### Internal Data models
 
@@ -66,15 +68,15 @@ We are aware that all of this could have been simplified by merging thoses two e
 
 Apache Flink® required specifically :
 
-- some dummy List & Map model to achieve "Range Lookup" in the statestores
-- an Envelope (Container) model to merge different object type in one in order to achieve N-Ary processing
+- some dummy List & Map models to achieve "Range Lookup" in the statestores
+- an Envelope (Container) model to merge different object types in one in order to achieve N-Ary processing
 
-[AlertMap](flink/src/main/java/org/lboutros/traveloptimizer/flink/jobs/internalmodels/AlertMap.java)
-[RequestList](flink/src/main/java/org/lboutros/traveloptimizer/flink/jobs/internalmodels/RequestList.java)
-[TimeTableEntry](flink/src/main/java/org/lboutros/traveloptimizer/flink/jobs/internalmodels/TimeTableEntry.java)
-[TimeTableMap](flink/src/main/java/org/lboutros/traveloptimizer/flink/jobs/internalmodels/TimeTableMap.java)
-[AlertMap](flink/src/main/java/org/lboutros/traveloptimizer/flink/jobs/internalmodels/AlertMap.java)
-[UnionEnvelope](flink/src/main/java/org/lboutros/traveloptimizer/flink/jobs/internalmodels/UnionEnvelope.java)
+- [AlertMap](flink/src/main/java/org/lboutros/traveloptimizer/flink/jobs/internalmodels/AlertMap.java)
+- [RequestList](flink/src/main/java/org/lboutros/traveloptimizer/flink/jobs/internalmodels/RequestList.java)
+- [TimeTableEntry](flink/src/main/java/org/lboutros/traveloptimizer/flink/jobs/internalmodels/TimeTableEntry.java)
+- [TimeTableMap](flink/src/main/java/org/lboutros/traveloptimizer/flink/jobs/internalmodels/TimeTableMap.java)
+- [AlertMap](flink/src/main/java/org/lboutros/traveloptimizer/flink/jobs/internalmodels/AlertMap.java)
+- [UnionEnvelope](flink/src/main/java/org/lboutros/traveloptimizer/flink/jobs/internalmodels/UnionEnvelope.java)
 
 #### Apache Kafka® Streams
 
@@ -123,3 +125,4 @@ This project is under-construction, the remaining identified steps are :
 - Reach 100% business test coverage
 - Implement a purging strategy to remove expired CustomerTravelRequest based on a new event : a specific train/plane has
   left the station/airport, or any Punctuation (Apache Kafka® Stream Like)
+- Implement a more complex efficiency logic to validate the business logic scalability of our designs 
