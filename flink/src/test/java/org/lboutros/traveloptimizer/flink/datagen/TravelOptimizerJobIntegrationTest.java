@@ -1,9 +1,9 @@
 package org.lboutros.traveloptimizer.flink.datagen;
 
+import lombok.SneakyThrows;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.formats.json.JsonSerializationSchema;
 import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration;
-import org.apache.flink.shaded.guava30.com.google.common.util.concurrent.Uninterruptibles;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -13,7 +13,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.lboutros.traveloptimizer.flink.jobs.TravelOptimizerJob;
-import org.lboutros.traveloptimizer.flink.jobs.internalmodels.UnionEnvelope;
 import org.lboutros.traveloptimizer.model.CustomerTravelRequest;
 import org.lboutros.traveloptimizer.model.PlaneTimeTableUpdate;
 import org.lboutros.traveloptimizer.model.TrainTimeTableUpdate;
@@ -21,12 +20,11 @@ import org.lboutros.traveloptimizer.model.TravelAlert;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class TravelOptimizerJobTest {
+class TravelOptimizerJobIntegrationTest {
 
     static final MiniClusterResourceConfiguration miniClusterConfig = new MiniClusterResourceConfiguration.Builder()
             .setNumberSlotsPerTaskManager(1)
@@ -37,9 +35,9 @@ class TravelOptimizerJobTest {
     StreamExecutionEnvironment env;
     WatermarkStrategy<CustomerTravelRequest> requestStrategy;
     WatermarkStrategy<TrainTimeTableUpdate> trainStrategy;
-    WatermarkStrategy<UnionEnvelope> unionStrategy;
     WatermarkStrategy<PlaneTimeTableUpdate> planeStrategy;
     DataStream.Collector<TravelAlert> collector;
+
 
     private void assertContains(DataStream.Collector<TravelAlert> collector, List<TravelAlert> expected) {
         List<TravelAlert> actual = new ArrayList<>();
@@ -56,27 +54,23 @@ class TravelOptimizerJobTest {
                         .registerModule(new JavaTimeModule()));
     }
 
+    @SneakyThrows
     @BeforeEach
     public void setup() {
         env = StreamExecutionEnvironment.getExecutionEnvironment();
 
         requestStrategy = WatermarkStrategy.noWatermarks();
 
-        trainStrategy = WatermarkStrategy
-                .<TrainTimeTableUpdate>forMonotonousTimestamps()
-                .withTimestampAssigner((event, timestamp) -> System.currentTimeMillis());
+        trainStrategy = WatermarkStrategy.noWatermarks();
 
-        planeStrategy = WatermarkStrategy
-                .<PlaneTimeTableUpdate>forMonotonousTimestamps()
-                .withTimestampAssigner((event, timestamp) -> System.currentTimeMillis());
-
-        unionStrategy = WatermarkStrategy.noWatermarks();
+        planeStrategy = WatermarkStrategy.noWatermarks();
 
         collector = new DataStream.Collector<>();
+
     }
 
     @Test
-    public void defineWorkflow_shouldConvertFlightDataToUserStatistics() throws Exception {
+    public void shouldGenerateAnAlertWhenRequestIsReceived() throws Exception {
 
         // Given
         CustomerTravelRequest request = DataGenerator.generateCustomerTravelRequestData();
@@ -98,31 +92,15 @@ class TravelOptimizerJobTest {
         expected.setDepartureTime(trainUpdate.getDepartureTime());
         expected.setArrivalTime(trainUpdate.getArrivalTime());
 
-        List<UnionEnvelope> elements = List.of(
-                UnionEnvelope.fromTrainTimeTableUpdate(trainUpdate),
-                UnionEnvelope.fromPlaneTimeTableUpdate(planeUpdate),
-                UnionEnvelope.fromCustomerTravelRequest(request)
-        );
 
-        DataStream<UnionEnvelope> unionStream = env.fromCollection(elements)
-                .assignTimestampsAndWatermarks(unionStrategy);
+        DataStream<TrainTimeTableUpdate> trainStream = env.fromElements(trainUpdate)
+                .assignTimestampsAndWatermarks(trainStrategy);
 
-        DataStream<TrainTimeTableUpdate> trainStream = unionStream
-                .filter(e -> e.getTrainTimeTableUpdate() != null)
-                .map(UnionEnvelope::getTrainTimeTableUpdate);
+        DataStream<PlaneTimeTableUpdate> planeStream = env.fromElements(planeUpdate)
+                .assignTimestampsAndWatermarks(planeStrategy);
 
-        DataStream<PlaneTimeTableUpdate> planeStream = unionStream
-                .filter(e -> e.getPlaneTimeTableUpdate() != null)
-                .map(UnionEnvelope::getPlaneTimeTableUpdate);
-
-        DataStream<CustomerTravelRequest> requestStream = unionStream
-                .filter(e -> e.getCustomerTravelRequest() != null)
-                .map(UnionEnvelope::getCustomerTravelRequest)
-                // Wait a bit for travel updates !! Ugggggly...
-                .map(e -> {
-                    Uninterruptibles.sleepUninterruptibly(1, TimeUnit.SECONDS);
-                    return e;
-                });
+        DataStream<CustomerTravelRequest> requestStream = env.fromElements(request)
+                .assignTimestampsAndWatermarks(requestStrategy);
 
         // When
         TravelOptimizerJob
@@ -134,4 +112,6 @@ class TravelOptimizerJobTest {
         // Then
         assertContains(collector, List.of(expected));
     }
+
+
 }

@@ -105,6 +105,13 @@
             <version>1.18.28</version>
         </dependency>
         <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-streaming-java</artifactId>
+            <version>${flink.version}</version>
+            <classifier>tests</classifier>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.lboutros.flink-kafka</groupId>
             <artifactId>models</artifactId>
             <version>1.0-SNAPSHOT</version>
