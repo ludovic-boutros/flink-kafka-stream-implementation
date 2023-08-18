@@ -5,6 +5,6 @@ import org.lboutros.traveloptimizer.model.TrainTimeTableUpdate;
 public class TrainTimeTableUpdateKeyStringSerializer extends FieldExtractorKeyStringSerializer<TrainTimeTableUpdate> {
 
     public String extractKey(TrainTimeTableUpdate data) {
-        return data.getId();
+        return data.getTravelId();
     }
 }

@@ -77,7 +77,7 @@ public class OptimizerFunction extends KeyedProcessFunction<String, UnionEnvelop
         var timeTableMap = getOrCreateStatestoreEntry(timeTableState, storageKey, TimeTableMap::new);
 
         // Upsert the new timetable entry
-        timeTableMap.put(timeUpdate.getId(), timeUpdate);
+        timeTableMap.put(timeUpdate.getTravelId(), timeUpdate);
 
         handleImpactedActiveTravels(out, requestState, timeTableState, storageKey, timeUpdate, timeTableMap);
         handleEarlyRequests(out, requestState, earlyRequestState, storageKey, timeUpdate);
@@ -86,7 +86,7 @@ public class OptimizerFunction extends KeyedProcessFunction<String, UnionEnvelop
 
     private void handleImpactedActiveTravels(Collector<TravelAlert> out, MapState<String, AlertMap> requestState, MapState<String, TimeTableMap> timeTableState, String storageKey, TimeTableEntry timeUpdate, TimeTableMap timeTableMap) throws Exception {
         // Lookup for impacted travels
-        var currentAlertMap = getOrCreateStatestoreEntry(requestState, timeUpdate.getId(), AlertMap::new);
+        var currentAlertMap = getOrCreateStatestoreEntry(requestState, timeUpdate.getTravelId(), AlertMap::new);
 
         List<String> idToRemove = new ArrayList<>();
 
@@ -95,24 +95,24 @@ public class OptimizerFunction extends KeyedProcessFunction<String, UnionEnvelop
             var newOptimal = getOptimalTravel(timeTableMap);
 
             // Update Request Store
-            updateAlert(travelAlert, newOptimal);
+            updateAlert(travelAlert, newOptimal, timeUpdate.getUpdateId());
 
             // Remove from the old alert map (old optimal)
             idToRemove.add(travelAlert.getId());
             // Update the new alert Map (new optimal)
-            var newAlertMap = getOrCreateStatestoreEntry(requestState, newOptimal.getId(), AlertMap::new);
+            var newAlertMap = getOrCreateStatestoreEntry(requestState, newOptimal.getTravelId(), AlertMap::new);
 
             newAlertMap.put(travelAlert.getId(), travelAlert);
 
             // Update Stores
-            requestState.put(newOptimal.getId(), newAlertMap);
+            requestState.put(newOptimal.getTravelId(), newAlertMap);
 
             // Collect
             out.collect(travelAlert); // the new alert
         }
 
         idToRemove.forEach(currentAlertMap::remove);
-        requestState.put(timeUpdate.getId(), currentAlertMap);
+        requestState.put(timeUpdate.getTravelId(), currentAlertMap);
 
         timeTableState.put(storageKey, timeTableMap);
     }
@@ -125,17 +125,18 @@ public class OptimizerFunction extends KeyedProcessFunction<String, UnionEnvelop
 
         for (CustomerTravelRequest request : requestList) {
             // Update Request Store
-            var newAlert = updateAlert(TravelAlert.fromRequest(request), timeUpdate);
+            var newAlert = updateAlert(TravelAlert.fromRequest(request), timeUpdate, timeUpdate.getUpdateId());
+            newAlert.setUpdateId(timeUpdate.getUpdateId());
 
             // Remove from the early list
             elementToRemove.add(request);
             // Update the new alert Map (new optimal)
-            var newAlertMap = getOrCreateStatestoreEntry(requestState, timeUpdate.getId(), AlertMap::new);
+            var newAlertMap = getOrCreateStatestoreEntry(requestState, timeUpdate.getTravelId(), AlertMap::new);
 
             newAlertMap.put(newAlert.getId(), newAlert);
 
             // Update Stores
-            requestState.put(timeUpdate.getId(), newAlertMap);
+            requestState.put(timeUpdate.getTravelId(), newAlertMap);
 
             // Collect
             out.collect(newAlert); // the new alert
@@ -158,13 +159,13 @@ public class OptimizerFunction extends KeyedProcessFunction<String, UnionEnvelop
         var optimalTravel = getOptimalTravel(timeTableMap);
 
         if (optimalTravel != null) {
-            updateAlert(newTravelAlert, optimalTravel);
+            updateAlert(newTravelAlert, optimalTravel, null);
 
-            var targetAlertMap = getOrCreateStatestoreEntry(requestState, optimalTravel.getId(), AlertMap::new);
+            var targetAlertMap = getOrCreateStatestoreEntry(requestState, optimalTravel.getTravelId(), AlertMap::new);
 
             targetAlertMap.put(newTravelAlert.getId(), newTravelAlert);
             // Store the result
-            requestState.put(optimalTravel.getId(), targetAlertMap);
+            requestState.put(optimalTravel.getTravelId(), targetAlertMap);
 
             // Forward the result
             out.collect(newTravelAlert);
@@ -179,12 +180,14 @@ public class OptimizerFunction extends KeyedProcessFunction<String, UnionEnvelop
 
     }
 
-    private TravelAlert updateAlert(TravelAlert alert, TimeTableEntry newOptimal) {
+    private TravelAlert updateAlert(TravelAlert alert, TimeTableEntry newOptimal, String updateId) {
 
         alert.setArrivalTime(newOptimal.getArrivalTime());
         alert.setDepartureTime(newOptimal.getDepartureTime());
         alert.setLastTravelId(alert.getTravelId());
-        alert.setTravelId(newOptimal.getId());
+        alert.setTravelId(newOptimal.getTravelId());
+        alert.setTravelType(newOptimal.getTravelType());
+        alert.setUpdateId(updateId);
 
         return alert;
     }

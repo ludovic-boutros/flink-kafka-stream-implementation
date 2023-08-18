@@ -10,7 +10,8 @@ import java.time.ZonedDateTime;
 @NoArgsConstructor
 @ToString
 public class TrainTimeTableUpdate {
-    private String id;
+    private String updateId;
+    private String travelId;
     private String departureLocation;
     private String arrivalLocation;
     private ZonedDateTime departureTime;

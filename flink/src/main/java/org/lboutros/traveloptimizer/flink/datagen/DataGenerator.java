@@ -83,7 +83,8 @@ public class DataGenerator {
 
         PlaneTimeTableUpdate flightData = new PlaneTimeTableUpdate();
 
-        flightData.setId(departureLocation + '#' + arrivalLocation + '_' + timeSlot);
+        flightData.setUpdateId(UUID.randomUUID().toString());
+        flightData.setTravelId(departureLocation + '#' + arrivalLocation + '_' + timeSlot);
         flightData.setDepartureLocation(departureLocation);
         flightData.setArrivalLocation(arrivalLocation);
         flightData.setDepartureTime(departureTime);
@@ -101,7 +102,8 @@ public class DataGenerator {
 
         TrainTimeTableUpdate trainData = new TrainTimeTableUpdate();
 
-        trainData.setId(departureLocation + '#' + arrivalLocation + '_' + timeSlot);
+        trainData.setUpdateId(UUID.randomUUID().toString());
+        trainData.setTravelId(departureLocation + '#' + arrivalLocation + '_' + timeSlot);
         trainData.setDepartureLocation(departureLocation);
         trainData.setArrivalLocation(arrivalLocation);
         trainData.setDepartureTime(departureTime);

@@ -2,10 +2,7 @@ package org.lboutros.traveloptimizer.flink.datagen;
 
 import lombok.SneakyThrows;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
-import org.apache.flink.formats.json.JsonSerializationSchema;
 import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration;
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.test.junit5.MiniClusterExtension;
@@ -14,11 +11,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.lboutros.traveloptimizer.flink.jobs.TravelOptimizerJob;
-import org.lboutros.traveloptimizer.model.CustomerTravelRequest;
-import org.lboutros.traveloptimizer.model.PlaneTimeTableUpdate;
-import org.lboutros.traveloptimizer.model.TrainTimeTableUpdate;
-import org.lboutros.traveloptimizer.model.TravelAlert;
+import org.lboutros.traveloptimizer.model.*;
 
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -49,17 +44,12 @@ class TravelOptimizerJobIntegrationTest {
         assertTrue(actual.containsAll(expected));
     }
 
-    public <T> JsonSerializationSchema<T> getJsonSerializerSchema() {
-        return new JsonSerializationSchema<>(
-                () -> new ObjectMapper()
-                        .registerModule(new JavaTimeModule()));
-    }
-
     @SneakyThrows
     @BeforeEach
     public void setup() {
         env = StreamExecutionEnvironment.getExecutionEnvironment();
 
+        env.getConfig().registerTypeWithKryoSerializer(ZonedDateTime.class, TimeSerializers.ZonedDateTimeSerializer.class);
         requestStrategy = WatermarkStrategy.noWatermarks();
 
         trainStrategy = WatermarkStrategy.noWatermarks();
@@ -93,6 +83,8 @@ class TravelOptimizerJobIntegrationTest {
         expected.setArrivalLocation(request.getArrivalLocation());
         expected.setDepartureTime(trainUpdate.getDepartureTime());
         expected.setArrivalTime(trainUpdate.getArrivalTime());
+        expected.setTravelType(TravelType.TRAIN);
+        expected.setTravelId(trainUpdate.getTravelId());
 
 
         DataStream<TrainTimeTableUpdate> trainStream = env.fromElements(trainUpdate)
@@ -112,7 +104,12 @@ class TravelOptimizerJobIntegrationTest {
         env.executeAsync();
 
         // Then
-        //assertContains(collector, List.of(expected));
+
+
+        expected.setDepartureTime(trainUpdate.getDepartureTime());
+        expected.setArrivalTime(trainUpdate.getArrivalTime());
+
+        assertContains(collector, List.of(expected));
     }
 
 

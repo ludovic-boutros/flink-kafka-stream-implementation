@@ -14,6 +14,8 @@ public class TravelAlert {
     private String id;
     private String travelId;
     private String lastTravelId;
+    private String updateId;
+    private TravelType travelType;
     private String departureLocation;
     private String arrivalLocation;
     private ZonedDateTime departureTime;

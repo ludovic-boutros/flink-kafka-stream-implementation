@@ -12,10 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.lboutros.traveloptimizer.flink.jobs.internalmodels.UnionEnvelope;
 import org.lboutros.traveloptimizer.flink.processfunctions.OptimizerFunction;
-import org.lboutros.traveloptimizer.model.CustomerTravelRequest;
-import org.lboutros.traveloptimizer.model.PlaneTimeTableUpdate;
-import org.lboutros.traveloptimizer.model.TrainTimeTableUpdate;
-import org.lboutros.traveloptimizer.model.TravelAlert;
+import org.lboutros.traveloptimizer.model.*;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -72,7 +69,9 @@ class TravelOptimizerJobUnitTest {
         expected.setArrivalLocation(request.getArrivalLocation());
         expected.setDepartureTime(trainUpdate.getDepartureTime());
         expected.setArrivalTime(trainUpdate.getArrivalTime());
-        expected.setTravelId(trainUpdate.getId());
+        expected.setTravelId(trainUpdate.getTravelId());
+        expected.setUpdateId(null);
+        expected.setTravelType(TravelType.TRAIN);
 
         List<UnionEnvelope> elements = List.of(
                 UnionEnvelope.fromTrainTimeTableUpdate(trainUpdate),
@@ -86,7 +85,8 @@ class TravelOptimizerJobUnitTest {
         optimizerTestHarness.processElement(elements.get(2), 1L);
 
         // Then
-        assertContains(optimizerTestHarness.getRecordOutput().stream().map(StreamRecord::getValue).collect(Collectors.toList()), List.of(expected));
+        var actual = optimizerTestHarness.getRecordOutput().stream().map(StreamRecord::getValue).collect(Collectors.toList());
+        assertContains(actual, List.of(expected));
     }
 
     @Test
@@ -127,7 +127,9 @@ class TravelOptimizerJobUnitTest {
         expected.setArrivalLocation(request.getArrivalLocation());
         expected.setDepartureTime(trainUpdate.getDepartureTime());
         expected.setArrivalTime(trainUpdate.getArrivalTime());
-        expected.setTravelId(trainUpdate.getId());
+        expected.setTravelId(trainUpdate.getTravelId());
+        expected.setUpdateId(trainUpdate.getUpdateId());
+        expected.setTravelType(TravelType.TRAIN);
 
         List<UnionEnvelope> elements = List.of(
                 UnionEnvelope.fromCustomerTravelRequest(request),
