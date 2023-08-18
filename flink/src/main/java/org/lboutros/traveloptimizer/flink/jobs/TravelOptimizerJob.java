@@ -2,9 +2,15 @@ package org.lboutros.traveloptimizer.flink.jobs;
 
 
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
+import org.apache.flink.connector.base.DeliveryGuarantee;
+import org.apache.flink.connector.kafka.sink.KafkaRecordSerializationSchema;
+import org.apache.flink.connector.kafka.sink.KafkaSink;
 import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
 import org.apache.flink.formats.json.JsonDeserializationSchema;
+import org.apache.flink.formats.json.JsonSerializationSchema;
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.datastream.KeyedStream;
@@ -27,6 +33,10 @@ public class TravelOptimizerJob {
         Properties consumerConfig = new Properties();
         try (InputStream stream = TravelOptimizerJob.class.getClassLoader().getResourceAsStream("consumer.properties")) {
             consumerConfig.load(stream);
+        }
+        Properties producerConfig = new Properties();
+        try (InputStream stream = TravelOptimizerJob.class.getClassLoader().getResourceAsStream("producer.properties")) {
+            producerConfig.load(stream);
         }
 
         KafkaSource<PlaneTimeTableUpdate> planeKafkaSource = KafkaSource.<PlaneTimeTableUpdate>builder()
@@ -59,7 +69,25 @@ public class TravelOptimizerJob {
         DataStreamSource<CustomerTravelRequest> requestStreamSource =
                 environment.fromSource(requestKafkaSource, WatermarkStrategy.noWatermarks(), "request_source");
 
-        defineWorkflow(planeStreamSource, trainStreamSource, requestStreamSource).print();
+
+        // SINKS
+        JsonSerializationSchema<TravelAlert> serializer = new JsonSerializationSchema<>(() ->
+                new ObjectMapper()
+                        .registerModule(new JavaTimeModule())
+        );
+        var kafkaSerializer = KafkaRecordSerializationSchema.<TravelAlert>builder()
+                .setTopic("travelAlerts")
+                .setValueSerializationSchema(serializer)
+                .build();
+
+        KafkaSink<TravelAlert> kafkaTravelAlertTopic = KafkaSink.<TravelAlert>builder()
+                .setKafkaProducerConfig(producerConfig)
+                .setRecordSerializer(kafkaSerializer)
+                .setDeliveryGuarantee(DeliveryGuarantee.AT_LEAST_ONCE)
+                .build();
+
+
+        defineWorkflow(planeStreamSource, trainStreamSource, requestStreamSource).sinkTo(kafkaTravelAlertTopic);
 
         environment.execute("TravelOptimizer");
     }
