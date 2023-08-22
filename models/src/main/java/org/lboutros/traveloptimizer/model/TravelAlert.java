@@ -10,7 +10,6 @@ import java.time.ZonedDateTime;
 @NoArgsConstructor
 @ToString
 public class TravelAlert {
-
     private String id;
     private String travelId;
     private String lastTravelId;
@@ -20,7 +19,7 @@ public class TravelAlert {
     private String arrivalLocation;
     private ZonedDateTime departureTime;
     private ZonedDateTime arrivalTime;
-    private String reason;
+    private ReasonCodes reason;
 
     public static TravelAlert fromRequest(CustomerTravelRequest request) {
         var travelAlert = new TravelAlert();
@@ -30,5 +29,9 @@ public class TravelAlert {
         travelAlert.setArrivalLocation(request.getArrivalLocation());
 
         return travelAlert;
+    }
+
+    public enum ReasonCodes {
+        DEPARTED
     }
 }

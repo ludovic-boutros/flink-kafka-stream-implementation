@@ -12,10 +12,13 @@ import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMap
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.lboutros.traveloptimizer.GlobalConstants;
 import org.lboutros.traveloptimizer.flink.serializer.CustomerTravelRequestKeyStringSerializer;
+import org.lboutros.traveloptimizer.flink.serializer.DepartureKeyStringSerializer;
 import org.lboutros.traveloptimizer.flink.serializer.PlaneTimeTableUpdateKeyStringSerializer;
 import org.lboutros.traveloptimizer.flink.serializer.TrainTimeTableUpdateKeyStringSerializer;
 import org.lboutros.traveloptimizer.model.CustomerTravelRequest;
+import org.lboutros.traveloptimizer.model.Departure;
 import org.lboutros.traveloptimizer.model.PlaneTimeTableUpdate;
 import org.lboutros.traveloptimizer.model.TrainTimeTableUpdate;
 
@@ -51,8 +54,16 @@ public class DataGeneratorJob {
                 new DataGeneratorSource<>(
                         index -> DataGenerator.generateCustomerTravelRequestData(),
                         Long.MAX_VALUE,
-                        RateLimiterStrategy.perSecond(0.1),
+                        RateLimiterStrategy.perSecond(100),
                         Types.POJO(CustomerTravelRequest.class)
+                );
+
+        DataGeneratorSource<Departure> departureSource =
+                new DataGeneratorSource<>(
+                        index -> DataGenerator.generateDepartureData(),
+                        Long.MAX_VALUE,
+                        RateLimiterStrategy.perSecond(1),
+                        Types.POJO(Departure.class)
                 );
 
         DataStream<PlaneTimeTableUpdate> planeStream = env
@@ -64,21 +75,30 @@ public class DataGeneratorJob {
         DataStream<CustomerTravelRequest> requestStream = env
                 .fromSource(requestSource, WatermarkStrategy.noWatermarks(), "request_source");
 
+        DataStream<Departure> departureStream = env
+                .fromSource(departureSource, WatermarkStrategy.noWatermarks(), "departure_source");
+
         KafkaRecordSerializationSchema<PlaneTimeTableUpdate> planeSerializer = KafkaRecordSerializationSchema.<PlaneTimeTableUpdate>builder()
-                .setTopic("planeTimeUpdated")
+                .setTopic(GlobalConstants.Topics.PLANE_TIME_UPDATE_TOPIC)
                 .setKafkaKeySerializer(PlaneTimeTableUpdateKeyStringSerializer.class)
                 .setValueSerializationSchema(new JsonSerializationSchema<>(DataGeneratorJob::getMapper))
                 .build();
 
         KafkaRecordSerializationSchema<TrainTimeTableUpdate> trainSerializer = KafkaRecordSerializationSchema.<TrainTimeTableUpdate>builder()
-                .setTopic("trainTimeUpdated")
+                .setTopic(GlobalConstants.Topics.TRAIN_TIME_UPDATE_TOPIC)
                 .setKafkaKeySerializer(TrainTimeTableUpdateKeyStringSerializer.class)
                 .setValueSerializationSchema(new JsonSerializationSchema<>(DataGeneratorJob::getMapper))
                 .build();
 
         KafkaRecordSerializationSchema<CustomerTravelRequest> requestSerializer = KafkaRecordSerializationSchema.<CustomerTravelRequest>builder()
-                .setTopic("customerTravelRequested")
+                .setTopic(GlobalConstants.Topics.CUSTOMER_TRAVEL_REQUEST_TOPIC)
                 .setKafkaKeySerializer(CustomerTravelRequestKeyStringSerializer.class)
+                .setValueSerializationSchema(new JsonSerializationSchema<>(DataGeneratorJob::getMapper))
+                .build();
+
+        KafkaRecordSerializationSchema<Departure> departureSerializer = KafkaRecordSerializationSchema.<Departure>builder()
+                .setTopic(GlobalConstants.Topics.DEPARTURE_TOPIC)
+                .setKafkaKeySerializer(DepartureKeyStringSerializer.class)
                 .setValueSerializationSchema(new JsonSerializationSchema<>(DataGeneratorJob::getMapper))
                 .build();
 
@@ -100,6 +120,12 @@ public class DataGeneratorJob {
                 .setDeliveryGuarantee(DeliveryGuarantee.AT_LEAST_ONCE)
                 .build();
 
+        KafkaSink<Departure> departureSink = KafkaSink.<Departure>builder()
+                .setKafkaProducerConfig(producerConfig)
+                .setRecordSerializer(departureSerializer)
+                .setDeliveryGuarantee(DeliveryGuarantee.AT_LEAST_ONCE)
+                .build();
+
         planeStream
                 .sinkTo(planeSink)
                 .name("plane_sink");
@@ -111,6 +137,10 @@ public class DataGeneratorJob {
         requestStream
                 .sinkTo(requestSink)
                 .name("request_sink");
+
+        departureStream
+                .sinkTo(departureSink)
+                .name("departure_sink");
 
         env.execute("InputStreams");
     }

@@ -15,7 +15,6 @@ import java.time.ZonedDateTime;
 public class TimeTableEntry implements Comparable<TimeTableEntry> {
     private String updateId;
     private String travelId;
-    private String customerTravelRequest;
     private TravelType travelType;
     private ZonedDateTime arrivalTime;
     private ZonedDateTime departureTime;

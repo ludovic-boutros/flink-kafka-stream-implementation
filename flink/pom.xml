@@ -79,6 +79,11 @@
             <version>${log4j.version}</version>
             <scope>runtime</scope>
         </dependency>
+        <dependency>
+            <groupId>org.lboutros.flink-kafka</groupId>
+            <artifactId>models</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
 
         <!-- Test Dependencies -->
         <dependency>
@@ -111,11 +116,6 @@
             <version>${flink.version}</version>
             <classifier>tests</classifier>
             <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.lboutros.flink-kafka</groupId>
-            <artifactId>models</artifactId>
-            <version>1.0-SNAPSHOT</version>
         </dependency>
     </dependencies>
 

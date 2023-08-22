@@ -16,10 +16,13 @@
         <maven.compiler.source>${target.java.version}</maven.compiler.source>
         <maven.compiler.target>${target.java.version}</maven.compiler.target>
         <log4j.version>2.20.0</log4j.version>
+        <slf4j.version>1.7.26</slf4j.version>
+        <commons-configuration2.version>2.8.0</commons-configuration2.version>
+        <commons-beanutils.version>1.9.4</commons-beanutils.version>
     </properties>
     <modules>
         <module>models</module>
         <module>flink</module>
-        <module>kstream</module>
+        <module>kstreams</module>
     </modules>
 </project>

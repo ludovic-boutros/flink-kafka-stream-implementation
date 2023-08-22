@@ -1,26 +1,19 @@
 package org.lboutros.traveloptimizer.flink.datagen;
 
-import org.lboutros.traveloptimizer.model.CustomerTravelRequest;
-import org.lboutros.traveloptimizer.model.PlaneTimeTableUpdate;
-import org.lboutros.traveloptimizer.model.TrainTimeTableUpdate;
+import org.lboutros.traveloptimizer.model.*;
 
-import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public class DataGenerator {
     public static final int MAX_AIRPORT_COUNT = 1;
     private static final Random RANDOM = new Random(System.currentTimeMillis());
-    private static final List<String> USERS = Stream
-            .generate(() -> generateString(5) + "@email.com")
-            .limit(100)
-            .collect(Collectors.toList());
 
     public static String generateAirportCode(int maxAirportCount) {
         return generateAirportCode(maxAirportCount, null);
@@ -44,28 +37,21 @@ public class DataGenerator {
         return airport;
     }
 
-    private static String generateString(int size) {
-        final String alphaString = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    private static ZonedDateTime generateDepartureTime(int timeSlot) {
+        ZonedDateTime now = ZonedDateTime.now(ZoneId.of("UTC"));
+        ZonedDateTime departureTime = now
+                .withHour(0)
+                .withMinute(0)
+                .withSecond(0)
+                .withNano(0)
+                .plus(timeSlot, ChronoUnit.HOURS)
+                .plusSeconds(RANDOM.nextInt(3600));
 
-        StringBuilder sb = new StringBuilder(size);
-
-        for (int i = 0; i < size; i++) {
-            final int index = RANDOM.nextInt(alphaString.length());
-            sb.append(alphaString.charAt(index));
+        if (departureTime.isBefore(now)) {
+            departureTime = departureTime.plusDays(1);
         }
 
-        return sb.toString();
-    }
-
-    private static String generateEmail() {
-        return USERS.get(RANDOM.nextInt(USERS.size()));
-    }
-
-    private static ZonedDateTime generateDepartureTime(int timeSlot) {
-        return LocalDate.now()
-                .atTime(timeSlot, 0, 0, 0)
-                .plusSeconds(RANDOM.nextInt(3600))
-                .atZone(ZoneId.of("UTC"));
+        return departureTime;
     }
 
     private static ZonedDateTime generateArrivalTime(ZonedDateTime departure) {
@@ -75,16 +61,20 @@ public class DataGenerator {
     }
 
     public static PlaneTimeTableUpdate generatePlaneData() {
+        return generatePlaneData(null);
+    }
+
+    public static PlaneTimeTableUpdate generatePlaneData(Integer slot) {
         String departureLocation = generateAirportCode(MAX_AIRPORT_COUNT);
         String arrivalLocation = generateAirportCode(MAX_AIRPORT_COUNT, departureLocation);
-        int timeSlot = RANDOM.nextInt(24);
+        int timeSlot = (slot == null ? RANDOM.nextInt(24) : slot);
         ZonedDateTime departureTime = generateDepartureTime(timeSlot);
         ZonedDateTime arrivalTime = generateArrivalTime(departureTime);
 
         PlaneTimeTableUpdate flightData = new PlaneTimeTableUpdate();
 
         flightData.setUpdateId(UUID.randomUUID().toString());
-        flightData.setTravelId(departureLocation + '#' + arrivalLocation + '_' + timeSlot);
+        flightData.setTravelId(computeTravelId(departureLocation, arrivalLocation, timeSlot, TravelType.PLANE));
         flightData.setDepartureLocation(departureLocation);
         flightData.setArrivalLocation(arrivalLocation);
         flightData.setDepartureTime(departureTime);
@@ -94,16 +84,20 @@ public class DataGenerator {
     }
 
     public static TrainTimeTableUpdate generateTrainData() {
+        return generateTrainData(null);
+    }
+
+    public static TrainTimeTableUpdate generateTrainData(Integer slot) {
         String departureLocation = generateAirportCode(MAX_AIRPORT_COUNT);
         String arrivalLocation = generateAirportCode(MAX_AIRPORT_COUNT, departureLocation);
-        int timeSlot = RANDOM.nextInt(24);
+        int timeSlot = (slot == null ? RANDOM.nextInt(24) : slot);
         ZonedDateTime departureTime = generateDepartureTime(timeSlot);
         ZonedDateTime arrivalTime = generateArrivalTime(departureTime);
 
         TrainTimeTableUpdate trainData = new TrainTimeTableUpdate();
 
         trainData.setUpdateId(UUID.randomUUID().toString());
-        trainData.setTravelId(departureLocation + '#' + arrivalLocation + '_' + timeSlot);
+        trainData.setTravelId(computeTravelId(departureLocation, arrivalLocation, timeSlot, TravelType.TRAIN));
         trainData.setDepartureLocation(departureLocation);
         trainData.setArrivalLocation(arrivalLocation);
         trainData.setDepartureTime(departureTime);
@@ -123,5 +117,28 @@ public class DataGenerator {
         customerTravelRequest.setArrivalLocation(arrivalLocation);
 
         return customerTravelRequest;
+    }
+
+    public static Departure generateDepartureData() {
+        String departureLocation = generateAirportCode(MAX_AIRPORT_COUNT);
+        String arrivalLocation = generateAirportCode(MAX_AIRPORT_COUNT, departureLocation);
+        int timeSlot = RANDOM.nextInt(24);
+        ZonedDateTime departureTime = generateDepartureTime(timeSlot);
+        ZonedDateTime arrivalTime = generateArrivalTime(departureTime);
+
+        Departure departureData = new Departure();
+
+        departureData.setTravelId(computeTravelId(departureLocation, arrivalLocation, timeSlot, RANDOM.nextBoolean() ? TravelType.TRAIN : TravelType.PLANE));
+        departureData.setEffectiveDepartureTime(departureTime);
+        departureData.setExpectedArrivalTime(arrivalTime);
+        departureData.setDepartureLocation(departureLocation);
+        departureData.setArrivalLocation(arrivalLocation);
+        departureData.setId(UUID.randomUUID().toString());
+
+        return departureData;
+    }
+
+    private static String computeTravelId(String departureLocation, String arrivalLocation, int timeSlot, TravelType type) {
+        return departureLocation + '#' + arrivalLocation + '#' + timeSlot + '_' + type;
     }
 }

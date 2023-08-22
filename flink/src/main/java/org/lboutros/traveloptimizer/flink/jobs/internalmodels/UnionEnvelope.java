@@ -2,6 +2,7 @@ package org.lboutros.traveloptimizer.flink.jobs.internalmodels;
 
 import lombok.*;
 import org.lboutros.traveloptimizer.model.CustomerTravelRequest;
+import org.lboutros.traveloptimizer.model.Departure;
 import org.lboutros.traveloptimizer.model.PlaneTimeTableUpdate;
 import org.lboutros.traveloptimizer.model.TrainTimeTableUpdate;
 
@@ -15,6 +16,7 @@ public class UnionEnvelope {
     private CustomerTravelRequest customerTravelRequest;
     private PlaneTimeTableUpdate planeTimeTableUpdate;
     private TrainTimeTableUpdate trainTimeTableUpdate;
+    private Departure departure;
 
     public static UnionEnvelope fromCustomerTravelRequest(CustomerTravelRequest customerTravelRequest) {
         UnionEnvelope envelope = new UnionEnvelope();
@@ -40,7 +42,20 @@ public class UnionEnvelope {
         return envelope;
     }
 
+    public static UnionEnvelope fromDeparture(Departure departure) {
+        UnionEnvelope envelope = new UnionEnvelope();
+        envelope.setDeparture(departure);
+        envelope.setPartitionKey(departure.getDepartureLocation() + '-' + departure.getArrivalLocation());
+
+        return envelope;
+    }
+
     public boolean isCustomerTravelRequest() {
         return customerTravelRequest != null;
     }
+
+    public boolean isDeparture() {
+        return departure != null;
+    }
+
 }

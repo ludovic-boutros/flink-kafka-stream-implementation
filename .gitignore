@@ -171,3 +171,4 @@ buildNumber.properties
 
 producer.properties
 consumer.properties
+application.properties

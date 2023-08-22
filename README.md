@@ -122,7 +122,4 @@ flink run -c org.lboutros.traveloptimizer.flink.jobs.TravelOptimizerJob target/f
 This project is under-construction, the remaining identified steps are :
 
 - Implement the equivalent use-case with Apache Kafka® Streams
-- Reach 100% business test coverage
-- Implement a purging strategy to remove expired CustomerTravelRequest based on a new event : a specific train/plane has
-  left the station/airport, or any Punctuation (Apache Kafka® Stream Like)
-- Implement a more complex efficiency logic to validate the business logic scalability of our designs 
+- Implement a more complex efficiency logic to validate the business logic scalability of our designs

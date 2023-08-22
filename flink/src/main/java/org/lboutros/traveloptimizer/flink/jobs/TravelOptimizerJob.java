@@ -15,15 +15,15 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.datastream.KeyedStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.lboutros.traveloptimizer.GlobalConstants;
 import org.lboutros.traveloptimizer.flink.datagen.DataGeneratorJob;
 import org.lboutros.traveloptimizer.flink.jobs.internalmodels.UnionEnvelope;
-import org.lboutros.traveloptimizer.flink.processfunctions.OptimizerFunction;
-import org.lboutros.traveloptimizer.model.CustomerTravelRequest;
-import org.lboutros.traveloptimizer.model.PlaneTimeTableUpdate;
-import org.lboutros.traveloptimizer.model.TrainTimeTableUpdate;
-import org.lboutros.traveloptimizer.model.TravelAlert;
+import org.lboutros.traveloptimizer.flink.jobs.processfunctions.OptimizerFunction;
+import org.lboutros.traveloptimizer.model.*;
 
 import java.io.InputStream;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.Properties;
 
 public class TravelOptimizerJob {
@@ -41,23 +41,30 @@ public class TravelOptimizerJob {
 
         KafkaSource<PlaneTimeTableUpdate> planeKafkaSource = KafkaSource.<PlaneTimeTableUpdate>builder()
                 .setProperties(consumerConfig)
-                .setTopics("planeTimeUpdated")
+                .setTopics(GlobalConstants.Topics.PLANE_TIME_UPDATE_TOPIC)
                 .setStartingOffsets(OffsetsInitializer.latest())
                 .setValueOnlyDeserializer(new JsonDeserializationSchema<>(PlaneTimeTableUpdate.class, DataGeneratorJob::getMapper))
                 .build();
 
         KafkaSource<TrainTimeTableUpdate> trainKafkaSource = KafkaSource.<TrainTimeTableUpdate>builder()
                 .setProperties(consumerConfig)
-                .setTopics("trainTimeUpdated")
+                .setTopics(GlobalConstants.Topics.TRAIN_TIME_UPDATE_TOPIC)
                 .setStartingOffsets(OffsetsInitializer.latest())
                 .setValueOnlyDeserializer(new JsonDeserializationSchema<>(TrainTimeTableUpdate.class, DataGeneratorJob::getMapper))
                 .build();
 
         KafkaSource<CustomerTravelRequest> requestKafkaSource = KafkaSource.<CustomerTravelRequest>builder()
                 .setProperties(consumerConfig)
-                .setTopics("customerTravelRequested")
+                .setTopics(GlobalConstants.Topics.CUSTOMER_TRAVEL_REQUEST_TOPIC)
                 .setStartingOffsets(OffsetsInitializer.latest())
                 .setValueOnlyDeserializer(new JsonDeserializationSchema<>(CustomerTravelRequest.class, DataGeneratorJob::getMapper))
+                .build();
+
+        KafkaSource<Departure> departureKafkaSource = KafkaSource.<Departure>builder()
+                .setProperties(consumerConfig)
+                .setTopics(GlobalConstants.Topics.DEPARTURE_TOPIC)
+                .setStartingOffsets(OffsetsInitializer.latest())
+                .setValueOnlyDeserializer(new JsonDeserializationSchema<>(Departure.class, DataGeneratorJob::getMapper))
                 .build();
 
         DataStreamSource<PlaneTimeTableUpdate> planeStreamSource =
@@ -69,6 +76,8 @@ public class TravelOptimizerJob {
         DataStreamSource<CustomerTravelRequest> requestStreamSource =
                 environment.fromSource(requestKafkaSource, WatermarkStrategy.noWatermarks(), "request_source");
 
+        DataStreamSource<Departure> departureStreamSource =
+                environment.fromSource(departureKafkaSource, WatermarkStrategy.noWatermarks(), "departure_source");
 
         // SINKS
         JsonSerializationSchema<TravelAlert> serializer = new JsonSerializationSchema<>(() ->
@@ -76,7 +85,7 @@ public class TravelOptimizerJob {
                         .registerModule(new JavaTimeModule())
         );
         var kafkaSerializer = KafkaRecordSerializationSchema.<TravelAlert>builder()
-                .setTopic("travelAlerts")
+                .setTopic(GlobalConstants.Topics.TRAVEL_ALERTS_TOPIC)
                 .setValueSerializationSchema(serializer)
                 .build();
 
@@ -86,21 +95,35 @@ public class TravelOptimizerJob {
                 .setDeliveryGuarantee(DeliveryGuarantee.AT_LEAST_ONCE)
                 .build();
 
-
-        defineWorkflow(planeStreamSource, trainStreamSource, requestStreamSource).sinkTo(kafkaTravelAlertTopic);
+        defineWorkflow(planeStreamSource, trainStreamSource, requestStreamSource, departureStreamSource).sinkTo(kafkaTravelAlertTopic);
 
         environment.execute("TravelOptimizer");
     }
 
     public static DataStream<TravelAlert> defineWorkflow(DataStream<PlaneTimeTableUpdate> planeStreamSource,
                                                          DataStream<TrainTimeTableUpdate> trainStreamSource,
-                                                         DataStream<CustomerTravelRequest> requestStreamSource) {
+                                                         DataStream<CustomerTravelRequest> requestStreamSource,
+                                                         DataStream<Departure> departureStreamSource) {
 
-        DataStream<UnionEnvelope> planeByLinkStream = planeStreamSource.map(UnionEnvelope::fromPlaneTimeTableUpdate);
-        DataStream<UnionEnvelope> trainByLinkStream = trainStreamSource.map(UnionEnvelope::fromTrainTimeTableUpdate);
+        DataStream<UnionEnvelope> planeByLinkStream = planeStreamSource
+                // Filter updates too close from the current time in order to mitigate the time table update zombies
+                // caused by the race condition between departure events and time table update events.
+                .filter(p -> p.getDepartureTime().isAfter(ZonedDateTime.now(ZoneId.of("UTC")).plusMinutes(5)))
+                .map(UnionEnvelope::fromPlaneTimeTableUpdate);
+
+        DataStream<UnionEnvelope> trainByLinkStream = trainStreamSource
+                // Filter updates too close from the current time in order to mitigate the time table update zombies
+                // caused by the race condition between departure events and time table update events.
+                .filter(t -> t.getDepartureTime().isAfter(ZonedDateTime.now(ZoneId.of("UTC")).plusMinutes(5)))
+                .map(UnionEnvelope::fromTrainTimeTableUpdate);
+
         DataStream<UnionEnvelope> requestByLinkStream = requestStreamSource.map(UnionEnvelope::fromCustomerTravelRequest);
+        DataStream<UnionEnvelope> departureByLinkStream = departureStreamSource.map(UnionEnvelope::fromDeparture);
 
-        KeyedStream<UnionEnvelope, String> unionStream = planeByLinkStream.union(trainByLinkStream.union(requestByLinkStream))
+        KeyedStream<UnionEnvelope, String> unionStream = planeByLinkStream
+                .union(trainByLinkStream)
+                .union(requestByLinkStream)
+                .union(departureByLinkStream)
                 .keyBy(UnionEnvelope::getPartitionKey);
 
         return unionStream.process(new OptimizerFunction());
