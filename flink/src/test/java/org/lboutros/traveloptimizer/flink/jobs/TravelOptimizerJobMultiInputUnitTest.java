@@ -1,15 +1,15 @@
 package org.lboutros.traveloptimizer.flink.jobs;
 
 import lombok.SneakyThrows;
-import org.apache.flink.api.common.typeinfo.Types;
-import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
+import org.apache.flink.api.common.typeinfo.BasicTypeInfo;
+import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
-import org.apache.flink.streaming.util.KeyedOneInputStreamOperatorTestHarness;
+import org.apache.flink.streaming.util.KeyedMultiInputStreamOperatorTestHarness;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.lboutros.traveloptimizer.flink.datagen.DataGenerator;
-import org.lboutros.traveloptimizer.flink.jobs.internalmodels.UnionEnvelope;
-import org.lboutros.traveloptimizer.flink.jobs.processfunctions.TravelOptimizerFunction;
+import org.lboutros.traveloptimizer.flink.jobs.internalmodels.Utils;
+import org.lboutros.traveloptimizer.flink.jobs.operators.TravelOptimizerOperator;
 import org.lboutros.traveloptimizer.model.*;
 
 import java.util.List;
@@ -20,9 +20,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.lboutros.traveloptimizer.model.TravelAlert.ReasonCodes.DEPARTED;
 
-class TravelOptimizerJobUnitTest {
+class TravelOptimizerJobMultiInputUnitTest {
     private final Random R = new Random();
-    private KeyedOneInputStreamOperatorTestHarness<String, UnionEnvelope, TravelAlert> optimizerTestHarness;
+    private KeyedMultiInputStreamOperatorTestHarness<String, TravelAlert> optimizerTestHarness;
 
     private void assertContains(List<TravelAlert> list, List<TravelAlert> expected) {
         assertEquals(expected.size(), list.size());
@@ -33,9 +33,22 @@ class TravelOptimizerJobUnitTest {
     @BeforeEach
     public void setup() {
 
-        var processOperatorToTest = new KeyedProcessOperator<>(new TravelOptimizerFunction());
+        var processOperatorToTest = new TravelOptimizerOperator.TravelOptimizerOperatorFactory();
+
+
         optimizerTestHarness =
-                new KeyedOneInputStreamOperatorTestHarness<>(processOperatorToTest, UnionEnvelope::getPartitionKey, Types.STRING);
+                new KeyedMultiInputStreamOperatorTestHarness<>(processOperatorToTest, BasicTypeInfo.STRING_TYPE_INFO);
+
+        KeySelector<PlaneTimeTableUpdate, String> planeEventKeySelector = value -> Utils.getPartitionKey(value.getDepartureLocation(), value.getArrivalLocation());
+        KeySelector<TrainTimeTableUpdate, String> trainEventKeySelector = value -> Utils.getPartitionKey(value.getDepartureLocation(), value.getArrivalLocation());
+        KeySelector<CustomerTravelRequest, String> requestEventKeySelector = value -> Utils.getPartitionKey(value.getDepartureLocation(), value.getArrivalLocation());
+        KeySelector<Departure, String> departureEventKeySelector = value -> Utils.getPartitionKey(value.getDepartureLocation(), value.getArrivalLocation());
+
+
+        optimizerTestHarness.setKeySelector(TravelOptimizerOperator.InputIndexes.TRAIN_UPDATE - 1, trainEventKeySelector);
+        optimizerTestHarness.setKeySelector(TravelOptimizerOperator.InputIndexes.PLANE_UPDATE - 1, planeEventKeySelector);
+        optimizerTestHarness.setKeySelector(TravelOptimizerOperator.InputIndexes.REQUEST - 1, requestEventKeySelector);
+        optimizerTestHarness.setKeySelector(TravelOptimizerOperator.InputIndexes.DEPARTURE - 1, departureEventKeySelector);
 
         optimizerTestHarness.setup();
         optimizerTestHarness.open();
@@ -84,18 +97,12 @@ class TravelOptimizerJobUnitTest {
         expectedPlaneAlert.setLastTravelId(trainUpdate.getTravelId());
         expectedPlaneAlert.setTravelType(TravelType.PLANE);
 
-        List<UnionEnvelope> elements = List.of(
-                UnionEnvelope.fromTrainTimeTableUpdate(trainUpdate),
-                UnionEnvelope.fromCustomerTravelRequest(request),
-                UnionEnvelope.fromPlaneTimeTableUpdate(planeUpdate),
-                UnionEnvelope.fromPlaneTimeTableUpdate(planeUpdateXY)
-        );
-
         // When
-        optimizerTestHarness.processElement(elements.get(0), 1L); // Timestamp is irrelevant #ignored
-        optimizerTestHarness.processElement(elements.get(1), 1L);
-        optimizerTestHarness.processElement(elements.get(2), 1L);
-        optimizerTestHarness.processElement(elements.get(3), 1L);
+        optimizerTestHarness.processElement(TravelOptimizerOperator.InputIndexes.TRAIN_UPDATE - 1, new StreamRecord<>(trainUpdate)); // Timestamp is irrelevant #ignored
+        optimizerTestHarness.processElement(TravelOptimizerOperator.InputIndexes.REQUEST - 1, new StreamRecord<>(request)); // Timestamp is irrelevant #ignored
+        optimizerTestHarness.processElement(TravelOptimizerOperator.InputIndexes.PLANE_UPDATE - 1, new StreamRecord<>(planeUpdate)); // Timestamp is irrelevant #ignored
+        optimizerTestHarness.processElement(TravelOptimizerOperator.InputIndexes.PLANE_UPDATE - 1, new StreamRecord<>(planeUpdateXY)); // Timestamp is irrelevant #ignored
+
 
         // Then
         var actual = optimizerTestHarness.getRecordOutput().stream().map(StreamRecord::getValue).collect(Collectors.toList());
@@ -110,13 +117,9 @@ class TravelOptimizerJobUnitTest {
         request.setDepartureLocation("ATL");
         request.setArrivalLocation("DFW");
 
-
-        List<UnionEnvelope> elements = List.of(
-                UnionEnvelope.fromCustomerTravelRequest(request)
-        );
-
         // When
-        optimizerTestHarness.processElement(elements.get(0), 1L);
+        optimizerTestHarness.processElement(TravelOptimizerOperator.InputIndexes.REQUEST - 1, new StreamRecord<>(request)); // Timestamp is irrelevant #ignored
+
 
         // Then
         assertTrue(optimizerTestHarness.getRecordOutput().isEmpty());
@@ -144,14 +147,8 @@ class TravelOptimizerJobUnitTest {
         expected.setUpdateId(trainUpdate.getUpdateId());
         expected.setTravelType(TravelType.TRAIN);
 
-        List<UnionEnvelope> elements = List.of(
-                UnionEnvelope.fromCustomerTravelRequest(request),
-                UnionEnvelope.fromTrainTimeTableUpdate(trainUpdate)
-        );
-
-        // When
-        optimizerTestHarness.processElement(elements.get(0), 1L); // Timestamp is irrelevant #ignored
-        optimizerTestHarness.processElement(elements.get(1), 1L);
+        optimizerTestHarness.processElement(getTestInputIndex(TravelOptimizerOperator.InputIndexes.REQUEST), new StreamRecord<>(request)); // Timestamp is irrelevant #ignored
+        optimizerTestHarness.processElement(getTestInputIndex(TravelOptimizerOperator.InputIndexes.TRAIN_UPDATE), new StreamRecord<>(trainUpdate)); // Timestamp is irrelevant #ignored
 
         // Then
         assertContains(optimizerTestHarness.getRecordOutput().stream().map(StreamRecord::getValue).collect(Collectors.toList()), List.of(expected));
@@ -195,16 +192,10 @@ class TravelOptimizerJobUnitTest {
         expectedDepartedAlert.setUpdateId(departure.getId());
         expectedDepartedAlert.setReason(DEPARTED);
 
-        List<UnionEnvelope> elements = List.of(
-                UnionEnvelope.fromCustomerTravelRequest(request),
-                UnionEnvelope.fromTrainTimeTableUpdate(trainUpdate),
-                UnionEnvelope.fromDeparture(departure)
-        );
-
         // When
-        optimizerTestHarness.processElement(elements.get(0), 1L); // Timestamp is irrelevant #ignored
-        optimizerTestHarness.processElement(elements.get(1), 1L);
-        optimizerTestHarness.processElement(elements.get(2), 1L);
+        optimizerTestHarness.processElement(getTestInputIndex(TravelOptimizerOperator.InputIndexes.REQUEST), new StreamRecord<>(request)); // Timestamp is irrelevant #ignored
+        optimizerTestHarness.processElement(getTestInputIndex(TravelOptimizerOperator.InputIndexes.TRAIN_UPDATE), new StreamRecord<>(trainUpdate)); // Timestamp is irrelevant #ignored
+        optimizerTestHarness.processElement(getTestInputIndex(TravelOptimizerOperator.InputIndexes.DEPARTURE), new StreamRecord<>(departure)); // Timestamp is irrelevant #ignored
 
         // Then
         assertContains(optimizerTestHarness.getRecordOutput().stream()
@@ -226,14 +217,9 @@ class TravelOptimizerJobUnitTest {
         departure.setDepartureLocation("ATL");
         departure.setArrivalLocation("DFW");
 
-        List<UnionEnvelope> elements = List.of(
-                UnionEnvelope.fromTrainTimeTableUpdate(trainUpdate),
-                UnionEnvelope.fromDeparture(departure)
-        );
-
         // When
-        optimizerTestHarness.processElement(elements.get(0), 1L); // Timestamp is irrelevant #ignored
-        optimizerTestHarness.processElement(elements.get(1), 1L);
+        optimizerTestHarness.processElement(getTestInputIndex(TravelOptimizerOperator.InputIndexes.TRAIN_UPDATE), new StreamRecord<>(trainUpdate)); // Timestamp is irrelevant #ignored
+        optimizerTestHarness.processElement(getTestInputIndex(TravelOptimizerOperator.InputIndexes.DEPARTURE), new StreamRecord<>(departure)); // Timestamp is irrelevant #ignored
 
         // Then
         assertContains(optimizerTestHarness.getRecordOutput().stream()
@@ -247,17 +233,23 @@ class TravelOptimizerJobUnitTest {
         // Given
         Departure departure = DataGenerator.generateDepartureData();
 
-        List<UnionEnvelope> elements = List.of(
-                UnionEnvelope.fromDeparture(departure)
-        );
-
         // When
-        optimizerTestHarness.processElement(elements.get(0), 1L); // Timestamp is irrelevant #ignored
+        optimizerTestHarness.processElement(getTestInputIndex(TravelOptimizerOperator.InputIndexes.DEPARTURE), new StreamRecord<>(departure)); // Timestamp is irrelevant #ignored
 
         // Then
         assertContains(optimizerTestHarness.getRecordOutput().stream()
                         .map(StreamRecord::getValue)
                         .collect(Collectors.toList()),
                 List.of());
+    }
+
+    /**
+     * Workaround for test input index being 0-based vs Real input being 1-based
+     *
+     * @param index
+     * @return
+     */
+    private int getTestInputIndex(int index) {
+        return index - 1;
     }
 }

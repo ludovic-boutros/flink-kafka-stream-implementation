@@ -21,7 +21,7 @@ public class UnionEnvelope {
     public static UnionEnvelope fromCustomerTravelRequest(CustomerTravelRequest customerTravelRequest) {
         UnionEnvelope envelope = new UnionEnvelope();
         envelope.setCustomerTravelRequest(customerTravelRequest);
-        envelope.setPartitionKey(customerTravelRequest.getDepartureLocation() + '-' + customerTravelRequest.getArrivalLocation());
+        envelope.setPartitionKey(Utils.getPartitionKey(customerTravelRequest.getDepartureLocation(), customerTravelRequest.getArrivalLocation()));
 
         return envelope;
     }
@@ -29,7 +29,7 @@ public class UnionEnvelope {
     public static UnionEnvelope fromPlaneTimeTableUpdate(PlaneTimeTableUpdate planeTimeTableUpdate) {
         UnionEnvelope envelope = new UnionEnvelope();
         envelope.setPlaneTimeTableUpdate(planeTimeTableUpdate);
-        envelope.setPartitionKey(planeTimeTableUpdate.getDepartureLocation() + '-' + planeTimeTableUpdate.getArrivalLocation());
+        envelope.setPartitionKey(Utils.getPartitionKey(planeTimeTableUpdate.getDepartureLocation(), planeTimeTableUpdate.getArrivalLocation()));
 
         return envelope;
     }
@@ -37,7 +37,7 @@ public class UnionEnvelope {
     public static UnionEnvelope fromTrainTimeTableUpdate(TrainTimeTableUpdate trainTimeTableUpdate) {
         UnionEnvelope envelope = new UnionEnvelope();
         envelope.setTrainTimeTableUpdate(trainTimeTableUpdate);
-        envelope.setPartitionKey(trainTimeTableUpdate.getDepartureLocation() + '-' + trainTimeTableUpdate.getArrivalLocation());
+        envelope.setPartitionKey(Utils.getPartitionKey(trainTimeTableUpdate.getDepartureLocation(), trainTimeTableUpdate.getArrivalLocation()));
 
         return envelope;
     }
@@ -45,7 +45,7 @@ public class UnionEnvelope {
     public static UnionEnvelope fromDeparture(Departure departure) {
         UnionEnvelope envelope = new UnionEnvelope();
         envelope.setDeparture(departure);
-        envelope.setPartitionKey(departure.getDepartureLocation() + '-' + departure.getArrivalLocation());
+        envelope.setPartitionKey(Utils.getPartitionKey(departure.getDepartureLocation(), departure.getArrivalLocation()));
 
         return envelope;
     }

@@ -1,4 +1,4 @@
-package org.lboutros.traveloptimizer.flink.serializer;
+package org.lboutros.traveloptimizer.flink.serializers;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;

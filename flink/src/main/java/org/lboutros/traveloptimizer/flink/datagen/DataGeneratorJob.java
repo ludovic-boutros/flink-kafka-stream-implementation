@@ -13,10 +13,10 @@ import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.datatype.jsr310.Ja
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.lboutros.traveloptimizer.GlobalConstants;
-import org.lboutros.traveloptimizer.flink.serializer.CustomerTravelRequestKeyStringSerializer;
-import org.lboutros.traveloptimizer.flink.serializer.DepartureKeyStringSerializer;
-import org.lboutros.traveloptimizer.flink.serializer.PlaneTimeTableUpdateKeyStringSerializer;
-import org.lboutros.traveloptimizer.flink.serializer.TrainTimeTableUpdateKeyStringSerializer;
+import org.lboutros.traveloptimizer.flink.serializers.CustomerTravelRequestKeyStringSerializer;
+import org.lboutros.traveloptimizer.flink.serializers.DepartureKeyStringSerializer;
+import org.lboutros.traveloptimizer.flink.serializers.PlaneTimeTableUpdateKeyStringSerializer;
+import org.lboutros.traveloptimizer.flink.serializers.TrainTimeTableUpdateKeyStringSerializer;
 import org.lboutros.traveloptimizer.model.CustomerTravelRequest;
 import org.lboutros.traveloptimizer.model.Departure;
 import org.lboutros.traveloptimizer.model.PlaneTimeTableUpdate;

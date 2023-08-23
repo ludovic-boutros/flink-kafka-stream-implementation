@@ -2,6 +2,9 @@ package org.lboutros.traveloptimizer.flink.jobs;
 
 
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
+import org.apache.flink.api.common.typeinfo.BasicTypeInfo;
+import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.connector.base.DeliveryGuarantee;
 import org.apache.flink.connector.kafka.sink.KafkaRecordSerializationSchema;
 import org.apache.flink.connector.kafka.sink.KafkaSink;
@@ -13,12 +16,14 @@ import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMap
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
-import org.apache.flink.streaming.api.datastream.KeyedStream;
+import org.apache.flink.streaming.api.datastream.MultipleConnectedStreams;
+import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.transformations.KeyedMultipleInputTransformation;
 import org.lboutros.traveloptimizer.GlobalConstants;
 import org.lboutros.traveloptimizer.flink.datagen.DataGeneratorJob;
-import org.lboutros.traveloptimizer.flink.jobs.internalmodels.UnionEnvelope;
-import org.lboutros.traveloptimizer.flink.jobs.processfunctions.TravelOptimizerFunction;
+import org.lboutros.traveloptimizer.flink.jobs.internalmodels.Utils;
+import org.lboutros.traveloptimizer.flink.jobs.operators.TravelOptimizerOperator;
 import org.lboutros.traveloptimizer.flink.serializers.TravelAlertKeyStringSerializer;
 import org.lboutros.traveloptimizer.model.*;
 
@@ -27,7 +32,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.Properties;
 
-public class TravelOptimizerJob {
+public class TravelOptimizerMultiInputJob {
     public static void main(String[] args) throws Exception {
         StreamExecutionEnvironment environment = StreamExecutionEnvironment.getExecutionEnvironment();
 
@@ -97,7 +102,7 @@ public class TravelOptimizerJob {
                 .setDeliveryGuarantee(DeliveryGuarantee.AT_LEAST_ONCE)
                 .build();
 
-        defineWorkflow(planeStreamSource, trainStreamSource, requestStreamSource, departureStreamSource).sinkTo(kafkaTravelAlertTopic);
+        defineWorkflow(planeStreamSource, trainStreamSource, requestStreamSource, departureStreamSource, environment).sinkTo(kafkaTravelAlertTopic);
 
         environment.execute("TravelOptimizer");
     }
@@ -105,30 +110,42 @@ public class TravelOptimizerJob {
     public static DataStream<TravelAlert> defineWorkflow(DataStream<PlaneTimeTableUpdate> planeStreamSource,
                                                          DataStream<TrainTimeTableUpdate> trainStreamSource,
                                                          DataStream<CustomerTravelRequest> requestStreamSource,
-                                                         DataStream<Departure> departureStreamSource) {
+                                                         DataStream<Departure> departureStreamSource,
+                                                         StreamExecutionEnvironment env) {
 
-        DataStream<UnionEnvelope> planeByLinkStream = planeStreamSource
+        var planeByLinkStream = planeStreamSource
                 // Filter updates too close from the current time in order to mitigate the time table update zombies
                 // caused by the race condition between departure events and time table update events.
-                .filter(p -> p.getDepartureTime().isAfter(ZonedDateTime.now(ZoneId.of("UTC")).plusMinutes(5)))
-                .map(UnionEnvelope::fromPlaneTimeTableUpdate);
+                .filter(p -> p.getDepartureTime().isAfter(ZonedDateTime.now(ZoneId.of("UTC")).plusMinutes(5)));
 
-        DataStream<UnionEnvelope> trainByLinkStream = trainStreamSource
+        SingleOutputStreamOperator<TrainTimeTableUpdate> trainByLinkStream = trainStreamSource
                 // Filter updates too close from the current time in order to mitigate the time table update zombies
                 // caused by the race condition between departure events and time table update events.
-                .filter(t -> t.getDepartureTime().isAfter(ZonedDateTime.now(ZoneId.of("UTC")).plusMinutes(5)))
-                .map(UnionEnvelope::fromTrainTimeTableUpdate);
+                .filter(t -> t.getDepartureTime().isAfter(ZonedDateTime.now(ZoneId.of("UTC")).plusMinutes(5)));
 
-        DataStream<UnionEnvelope> requestByLinkStream = requestStreamSource.map(UnionEnvelope::fromCustomerTravelRequest);
-        DataStream<UnionEnvelope> departureByLinkStream = departureStreamSource.map(UnionEnvelope::fromDeparture);
+        KeyedMultipleInputTransformation<TravelAlert> transform =
+                new KeyedMultipleInputTransformation<>(
+                        "Multi Type Input Operator",
+                        new TravelOptimizerOperator.TravelOptimizerOperatorFactory(),
+                        TypeInformation.of(TravelAlert.class), // Output Type
+                        1, // ?
+                        BasicTypeInfo.STRING_TYPE_INFO); // Partition key type ?
 
-        KeyedStream<UnionEnvelope, String> unionStream = planeByLinkStream
-                .union(trainByLinkStream)
-                .union(requestByLinkStream)
-                .union(departureByLinkStream)
-                .keyBy(UnionEnvelope::getPartitionKey);
 
-        return unionStream.process(new TravelOptimizerFunction());
+        KeySelector<PlaneTimeTableUpdate, String> planeEventKeySelector = value -> Utils.getPartitionKey(value.getDepartureLocation(), value.getArrivalLocation());
+        KeySelector<TrainTimeTableUpdate, String> trainEventKeySelector = value -> Utils.getPartitionKey(value.getDepartureLocation(), value.getArrivalLocation());
+        KeySelector<CustomerTravelRequest, String> requestEventKeySelector = value -> Utils.getPartitionKey(value.getDepartureLocation(), value.getArrivalLocation());
+        KeySelector<Departure, String> departureEventKeySelector = value -> Utils.getPartitionKey(value.getDepartureLocation(), value.getArrivalLocation());
+
+        env.addOperator(
+                transform
+                        .addInput(planeByLinkStream.getTransformation(), planeEventKeySelector)
+                        .addInput(trainByLinkStream.getTransformation(), trainEventKeySelector)
+                        .addInput(requestStreamSource.getTransformation(), requestEventKeySelector)
+                        .addInput(departureStreamSource.getTransformation(), departureEventKeySelector));
+
+
+        return new MultipleConnectedStreams(env).transform(transform);
     }
 
 
