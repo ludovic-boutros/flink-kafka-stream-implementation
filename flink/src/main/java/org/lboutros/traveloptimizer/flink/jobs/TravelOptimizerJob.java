@@ -19,6 +19,7 @@ import org.lboutros.traveloptimizer.GlobalConstants;
 import org.lboutros.traveloptimizer.flink.datagen.DataGeneratorJob;
 import org.lboutros.traveloptimizer.flink.jobs.internalmodels.UnionEnvelope;
 import org.lboutros.traveloptimizer.flink.jobs.processfunctions.OptimizerFunction;
+import org.lboutros.traveloptimizer.flink.serializer.TravelAlertKeyStringSerializer;
 import org.lboutros.traveloptimizer.model.*;
 
 import java.io.InputStream;
@@ -86,6 +87,7 @@ public class TravelOptimizerJob {
         );
         var kafkaSerializer = KafkaRecordSerializationSchema.<TravelAlert>builder()
                 .setTopic(GlobalConstants.Topics.TRAVEL_ALERTS_TOPIC)
+                .setKafkaKeySerializer(TravelAlertKeyStringSerializer.class)
                 .setValueSerializationSchema(serializer)
                 .build();
 
