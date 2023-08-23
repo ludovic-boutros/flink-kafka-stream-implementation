@@ -1,4 +1,4 @@
-package org.lboutros.configuration;
+package org.lboutros.traveloptimizer.kstreams.configuration;
 
 import org.apache.commons.configuration2.Configuration;
 import org.apache.commons.configuration2.ConfigurationConverter;
@@ -12,8 +12,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
-
-import static org.lboutros.configuration.Constants.APPLICATION_ID_PREFIX;
 
 public class Utils {
 
@@ -49,6 +47,6 @@ public class Utils {
     }
 
     public static void setApplicationId(Properties properties, String applicationId) {
-        properties.put(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID_PREFIX + applicationId);
+        properties.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
     }
 }

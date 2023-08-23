@@ -1,4 +1,4 @@
-package org.lboutros.traveloptimizer.kstreams.topology;
+package org.lboutros.traveloptimizer.kstreams.topologies;
 
 import lombok.Getter;
 import org.apache.kafka.streams.StreamsBuilder;

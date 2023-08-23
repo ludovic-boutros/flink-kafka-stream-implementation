@@ -1,4 +1,4 @@
-package org.lboutros.traveloptimizer.kstreams.topology;
+package org.lboutros.traveloptimizer.kstreams.topologies;
 
 import org.apache.kafka.streams.Topology;
 

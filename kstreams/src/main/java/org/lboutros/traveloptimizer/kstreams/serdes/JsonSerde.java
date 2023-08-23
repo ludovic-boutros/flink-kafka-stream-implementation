@@ -1,4 +1,4 @@
-package org.lboutros.traveloptimizer.kstreams.serde;
+package org.lboutros.traveloptimizer.kstreams.serdes;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -6,12 +6,13 @@ import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
+import org.lboutros.traveloptimizer.kstreams.configuration.Constants;
 
 import java.io.IOException;
 import java.util.Map;
 
 public abstract class JsonSerde<T> implements Serializer<T>, Deserializer<T>, Serde<T> {
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final ObjectMapper OBJECT_MAPPER = Constants.OBJECT_MAPPER;
     private TypeReference<T> typeReference;
 
     @Override

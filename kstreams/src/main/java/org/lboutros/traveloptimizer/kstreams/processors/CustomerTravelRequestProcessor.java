@@ -9,7 +9,7 @@ import org.lboutros.traveloptimizer.kstreams.models.TimeTableUpdate;
 import org.lboutros.traveloptimizer.model.CustomerTravelRequest;
 import org.lboutros.traveloptimizer.model.TravelAlert;
 
-public class TimeTableUpdateProcessor extends ContextualProcessor<String, TimeTableUpdate, String, TravelAlert> {
+public class CustomerTravelRequestProcessor extends ContextualProcessor<String, CustomerTravelRequest, String, TravelAlert> {
 
     private KeyValueStore<String, TimeTableUpdate> availableConnections;
     private KeyValueStore<String, CustomerTravelRequest> activeRequests;
@@ -24,7 +24,7 @@ public class TimeTableUpdateProcessor extends ContextualProcessor<String, TimeTa
     }
 
     @Override
-    public void process(Record<String, TimeTableUpdate> record) {
+    public void process(Record<String, CustomerTravelRequest> record) {
 
     }
 }

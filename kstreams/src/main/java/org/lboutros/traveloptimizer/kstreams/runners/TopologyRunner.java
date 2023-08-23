@@ -1,4 +1,4 @@
-package org.lboutros.traveloptimizer.kstreams.runner;
+package org.lboutros.traveloptimizer.kstreams.runners;
 
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +18,7 @@ public class TopologyRunner {
         final CountDownLatch latch = new CountDownLatch(1);
 
         log.info(topology.describe().toString());
+        
         try (KafkaStreams kafkaStreams = new KafkaStreams(topology, streamsConfiguration)) {
             kafkaStreams.cleanUp();
             kafkaStreams.start();
