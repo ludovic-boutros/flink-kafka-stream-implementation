@@ -24,11 +24,12 @@ Apache Kafka® Streams & Apache Flink® DataStream.
 Individuals wants to know when the next most efficient travel is planned for a specific connection (ex : DFW (Dallas) to
 ATL (Atlanta))
 
-Three existing events are available to consume (We will use a Apache Flink® Datagen job) :
+Four existing events are available to consume (We will use a Apache Flink® Datagen job) :
 
 - CustomerTravelRequest : a new customer emit the wish for a travel on a connection
 - PlaneTimeTableUpdate : a new plane as been scheduled or moved around
 - TrainTimeTableUpdate : a new train as been scheduled or moved around
+- Departure : a train or plane departed
 
 We want to manage all those scenarios :
 
@@ -37,6 +38,7 @@ We want to manage all those scenarios :
   available
 - An existing customer request is impacted by new transport availability or timetable update : the customer will receive
   the new optimal transportation information
+- An existing customer request is impacted by a transport departure
 
 ![Conceptual Use Case](images/concept.png)
 
@@ -61,6 +63,7 @@ The current implementation of "most efficient" is currently : the available conn
 - [PlaneTimeTableUpdate](models/src/main/java/org/lboutros/traveloptimizer/model/PlaneTimeTableUpdate.java)
 - [TrainTimeTableUpdate](models/src/main/java/org/lboutros/traveloptimizer/model/TrainTimeTableUpdate.java)
 - [TravelAlert](models/src/main/java/org/lboutros/traveloptimizer/model/TravelAlert.java)
+- [Departure](models/src/main/java/org/lboutros/traveloptimizer/model/Departure.java)
 
 ### Internal Data models
 
@@ -80,7 +83,9 @@ Apache Flink® required specifically :
 
 #### Apache Kafka® Streams
 
-**UNDER-CONSTRUCTION**
+We only added a data model for time table updates:
+
+- [TimeTableEntry](kstreams/src/main/java/org/lboutros/traveloptimizer/kstreams/topologies/models/TimeTableEntry.java)
 
 ## How to build
 
