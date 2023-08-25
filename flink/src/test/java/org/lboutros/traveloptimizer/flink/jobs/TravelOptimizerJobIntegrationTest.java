@@ -10,9 +10,9 @@ import org.junit.Ignore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
-import org.lboutros.traveloptimizer.flink.datagen.DataGenerator;
 import org.lboutros.traveloptimizer.flink.datagen.TimeSerializers;
 import org.lboutros.traveloptimizer.model.*;
+import org.lboutros.traveloptimizer.model.generator.DataGenerator;
 
 import java.time.ZonedDateTime;
 import java.util.ArrayList;

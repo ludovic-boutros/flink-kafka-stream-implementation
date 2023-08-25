@@ -3,7 +3,7 @@ package org.lboutros.traveloptimizer.flink.datagen;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.lboutros.traveloptimizer.flink.datagen.DataGenerator.generateAirportCode;
+import static org.lboutros.traveloptimizer.model.generator.DataGenerator.generateAirportCode;
 
 class DataGeneratorTest {
 

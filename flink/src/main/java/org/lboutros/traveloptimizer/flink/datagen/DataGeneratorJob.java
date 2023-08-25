@@ -21,6 +21,7 @@ import org.lboutros.traveloptimizer.model.CustomerTravelRequest;
 import org.lboutros.traveloptimizer.model.Departure;
 import org.lboutros.traveloptimizer.model.PlaneTimeTableUpdate;
 import org.lboutros.traveloptimizer.model.TrainTimeTableUpdate;
+import org.lboutros.traveloptimizer.model.generator.DataGenerator;
 
 import java.io.InputStream;
 import java.util.Properties;

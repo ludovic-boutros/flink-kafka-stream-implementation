@@ -1,4 +1,4 @@
-package org.lboutros.traveloptimizer.flink.datagen;
+package org.lboutros.traveloptimizer.model.generator;
 
 import org.lboutros.traveloptimizer.model.*;
 
@@ -38,7 +38,7 @@ public class DataGenerator {
     }
 
     private static ZonedDateTime generateDepartureTime(int timeSlot) {
-        ZonedDateTime now = ZonedDateTime.now(ZoneId.of("UTC"));
+        ZonedDateTime now = ZonedDateTime.now(ZoneId.of("UTC").normalized());
         ZonedDateTime departureTime = now
                 .withHour(0)
                 .withMinute(0)

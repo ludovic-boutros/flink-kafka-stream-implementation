@@ -7,10 +7,10 @@ import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.util.KeyedMultiInputStreamOperatorTestHarness;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.lboutros.traveloptimizer.flink.datagen.DataGenerator;
 import org.lboutros.traveloptimizer.flink.jobs.internalmodels.Utils;
 import org.lboutros.traveloptimizer.flink.jobs.operators.TravelOptimizerOperator;
 import org.lboutros.traveloptimizer.model.*;
+import org.lboutros.traveloptimizer.model.generator.DataGenerator;
 
 import java.util.List;
 import java.util.Random;
