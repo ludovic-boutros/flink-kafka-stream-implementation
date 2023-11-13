@@ -11,5 +11,7 @@ public class CustomerTravelRequest {
     private String id;
     private String departureLocation;
     private String arrivalLocation;
+
+    private String hugeDummyData;
 }
 

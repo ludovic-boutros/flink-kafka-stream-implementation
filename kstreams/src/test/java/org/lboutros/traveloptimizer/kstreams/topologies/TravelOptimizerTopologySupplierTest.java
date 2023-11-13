@@ -2,6 +2,7 @@ package org.lboutros.traveloptimizer.kstreams.topologies;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.configuration2.ex.ConfigurationException;
+import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.TestInputTopic;
@@ -18,12 +19,10 @@ import org.lboutros.traveloptimizer.kstreams.configuration.Constants;
 import org.lboutros.traveloptimizer.model.*;
 import org.lboutros.traveloptimizer.model.generator.DataGenerator;
 
+import java.lang.reflect.Field;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Random;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -107,10 +106,15 @@ class TravelOptimizerTopologySupplierTest {
     @Test
     @Ignore
     @SuppressWarnings("unchecked")
-    public void testSSTore() {
+    public void testSSTore() throws NoSuchFieldException, IllegalAccessException {
         Random R = new Random();
 
-        MeteredKeyValueStore<String, CustomerTravelRequest> customerStateStore = (MeteredKeyValueStore) testDriver.getKeyValueStore(EARLY_REQUESTS_STATE_STORE);
+        MeteredKeyValueStore<String, CustomerTravelRequest> customerStateStore =
+                (MeteredKeyValueStore) testDriver.getKeyValueStore(EARLY_REQUESTS_STATE_STORE);
+
+        Field producerPrivateField = TopologyTestDriver.class.getDeclaredField("producer");
+        producerPrivateField.setAccessible(true);
+        MockProducer producer = (MockProducer) producerPrivateField.get(testDriver);
 
         // Change log topic's name travel-optimizer-earlyRequestStateStore-changelog
 
@@ -118,28 +122,58 @@ class TravelOptimizerTopologySupplierTest {
 
         for (int i = 0; i < 100_000_000; i++) {
             CustomerTravelRequest request = DataGenerator.generateCustomerTravelRequestData();
+            request.setHugeDummyData(generateDummyData(R, 100));
+
+            int nextInt = R.nextInt(1_000);
             request.setDepartureLocation(Integer.toString(R.nextInt(10_000_000) + 10_000_000));
             request.setArrivalLocation(Integer.toString(R.nextInt(50_000_000) + 10_000_000));
             customerStateStore.put(request.getDepartureLocation() + "#" + request.getArrivalLocation(), request);
+            if (nextInt < 10) {
+                customerStateStore.put("DELETE#" + request.getDepartureLocation() + "#" + request.getArrivalLocation(), request);
+            }
 
             if (i % 100_000 == 0) {
                 log.info("FluuuuuuussssSSSSH !");
                 customerStateStore.flush();
                 customerStateStore.flushCache();
+                producer.clear();
             }
+
             // When
-            long start = Instant.now().toEpochMilli();
+            Instant now = Instant.now();
+            long start = now.getEpochSecond() * 1_000_000 + now.getNano() / 1_000;
+            List<String> keys = new ArrayList<>();
             try (KeyValueIterator<String, CustomerTravelRequest> iterator =
                          customerStateStore.prefixScan("DELETE#", Serdes.String().serializer())) {
-                totalTime += Instant.now().toEpochMilli() - start;
+                Instant prefixNow = Instant.now();
+                long prefixScanTime = prefixNow.getEpochSecond() * 1_000_000 + prefixNow.getNano() / 1_000 - start;
+                totalTime += prefixScanTime;
                 if (i % 100_000 == 0) {
-                    if (iterator.hasNext()) {
-                        log.info("{}: {} entries: {} ms: {}", i, customerStateStore.approximateNumEntries(), Instant.now().toEpochMilli() - start, iterator.next().key);
+                    while (iterator.hasNext() && keys.size() < 300) {
+                        keys.add(iterator.next().key);
                     }
-                    log.info("{}: {} entries: Average time: {}", i, customerStateStore.approximateNumEntries(), ((float) totalTime) / i);
+                    if (iterator.hasNext()) {
+                        log.info("{}: {} entries: {} μs: {}", i, customerStateStore.approximateNumEntries(), prefixScanTime, iterator.next().key);
+                    }
+                    log.info("{}: {} entries: Average time: {} μs", i, customerStateStore.approximateNumEntries(), ((double) totalTime) / i);
                 }
             }
+
+            if (!keys.isEmpty()) {
+                log.info("Deleting {} keys...", keys.size());
+                keys.forEach(customerStateStore::delete);
+                log.info("Deleting done.");
+            }
         }
+    }
+
+    private String generateDummyData(Random R, int count) {
+        StringBuilder builder = new StringBuilder();
+
+        for (int i = 0; i < count; i++) {
+            builder.append(R.nextInt(256));
+        }
+        return builder.toString();
     }
 
     @Test
