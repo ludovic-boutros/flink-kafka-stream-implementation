@@ -1,11 +1,15 @@
 package org.lboutros.traveloptimizer.kstreams.topologies;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.configuration2.ex.ConfigurationException;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.internals.MeteredKeyValueStore;
+import org.junit.Ignore;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,10 +27,12 @@ import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.lboutros.traveloptimizer.kstreams.configuration.Constants.StateStores.EARLY_REQUESTS_STATE_STORE;
 import static org.lboutros.traveloptimizer.kstreams.configuration.Utils.readConfiguration;
 import static org.lboutros.traveloptimizer.kstreams.configuration.Utils.toMap;
 import static org.lboutros.traveloptimizer.model.TravelAlert.ReasonCodes.DEPARTED;
 
+@Slf4j
 class TravelOptimizerTopologySupplierTest {
     private final Random R = new Random();
     private final Serde<String> keySerde = Serdes.String();
@@ -98,6 +104,43 @@ class TravelOptimizerTopologySupplierTest {
         testDriver.close();
     }
 
+    @Test
+    @Ignore
+    @SuppressWarnings("unchecked")
+    public void testSSTore() {
+        Random R = new Random();
+
+        MeteredKeyValueStore<String, CustomerTravelRequest> customerStateStore = (MeteredKeyValueStore) testDriver.getKeyValueStore(EARLY_REQUESTS_STATE_STORE);
+
+        // Change log topic's name travel-optimizer-earlyRequestStateStore-changelog
+
+        int totalTime = 0;
+
+        for (int i = 0; i < 100_000_000; i++) {
+            CustomerTravelRequest request = DataGenerator.generateCustomerTravelRequestData();
+            request.setDepartureLocation(Integer.toString(R.nextInt(10_000_000) + 10_000_000));
+            request.setArrivalLocation(Integer.toString(R.nextInt(50_000_000) + 10_000_000));
+            customerStateStore.put(request.getDepartureLocation() + "#" + request.getArrivalLocation(), request);
+
+            if (i % 100_000 == 0) {
+                log.info("FluuuuuuussssSSSSH !");
+                customerStateStore.flush();
+                customerStateStore.flushCache();
+            }
+            // When
+            long start = Instant.now().toEpochMilli();
+            try (KeyValueIterator<String, CustomerTravelRequest> iterator =
+                         customerStateStore.prefixScan("DELETE#", Serdes.String().serializer())) {
+                totalTime += Instant.now().toEpochMilli() - start;
+                if (i % 100_000 == 0) {
+                    if (iterator.hasNext()) {
+                        log.info("{}: {} entries: {} ms: {}", i, customerStateStore.approximateNumEntries(), Instant.now().toEpochMilli() - start, iterator.next().key);
+                    }
+                    log.info("{}: {} entries: Average time: {}", i, customerStateStore.approximateNumEntries(), ((float) totalTime) / i);
+                }
+            }
+        }
+    }
 
     @Test
     public void shouldGenerateAnAlertWhenRequestIsReceived() {
