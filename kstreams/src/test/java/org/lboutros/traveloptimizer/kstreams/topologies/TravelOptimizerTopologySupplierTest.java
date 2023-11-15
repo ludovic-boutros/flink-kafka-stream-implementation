@@ -23,6 +23,7 @@ import java.lang.reflect.Field;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -62,6 +63,7 @@ class TravelOptimizerTopologySupplierTest {
 
         // Init test driver
         testDriver = new TopologyTestDriver(new TravelOptimizerTopologySupplier(streamsConfiguration).get(), streamsConfiguration, Instant.EPOCH);
+
 
         // Setup test topics
         trainTimeTableUpdateInputTopic = testDriver.createInputTopic(GlobalConstants.Topics.TRAIN_TIME_UPDATE_TOPIC,
@@ -106,6 +108,12 @@ class TravelOptimizerTopologySupplierTest {
     @Test
     @Ignore
     @SuppressWarnings("unchecked")
+    public void cleanup() throws NoSuchFieldException, IllegalAccessException {
+    }
+
+    @Test
+    @Ignore
+    @SuppressWarnings("unchecked")
     public void testSSTore() throws NoSuchFieldException, IllegalAccessException {
         Random R = new Random();
 
@@ -120,9 +128,11 @@ class TravelOptimizerTopologySupplierTest {
 
         int totalTime = 0;
 
-        for (int i = 0; i < 100_000_000; i++) {
+
+        // Insert 100M entries in the state
+        for (int i = 0; i < 2_000_000; i++) {
             CustomerTravelRequest request = DataGenerator.generateCustomerTravelRequestData();
-            request.setHugeDummyData(generateDummyData(R, 100));
+            request.setHugeDummyData(generateDummyData(R, 10));
 
             int nextInt = R.nextInt(1_000);
             request.setDepartureLocation(Integer.toString(R.nextInt(10_000_000) + 10_000_000));
@@ -130,6 +140,14 @@ class TravelOptimizerTopologySupplierTest {
             customerStateStore.put(request.getDepartureLocation() + "#" + request.getArrivalLocation(), request);
             if (nextInt < 10) {
                 customerStateStore.put("DELETE#" + request.getDepartureLocation() + "#" + request.getArrivalLocation(), request);
+            }
+
+            if (i % 1_000 != 0) {
+                // Key is quite long and random
+                customerStateStore.put(request.getDepartureLocation() + "#" + request.getArrivalLocation(), request);
+            } else {
+                // One out of 1000 is a DELETED prefix entry
+                customerStateStore.put("DELETED#" + request.getDepartureLocation() + "#" + request.getArrivalLocation(), request);
             }
 
             if (i % 100_000 == 0) {
@@ -163,8 +181,81 @@ class TravelOptimizerTopologySupplierTest {
                 log.info("Deleting {} keys...", keys.size());
                 keys.forEach(customerStateStore::delete);
                 log.info("Deleting done.");
+
+/*
+                log.info("memtable-hit-ratio - " + getMetricValue("memtable-hit-ratio"));
+                log.info("block-cache-data-hit-ratio - " + getMetricValue("block-cache-data-hit-ratio"));
+                log.info("block-cache-index - " + getMetricValue("block-cache-index-hit-ratio"));
+                log.info("block-cache-filter - " + getMetricValue("block-cache-filter-hit-ratio"));
+*/
             }
         }
+
+
+        while (customerStateStore.approximateNumEntries() > 1000) {
+            int nbEntryDeleted = 0;
+            int nbEntryAdded = 0;
+            int nbDeleteEntryAdded = 0;
+
+            try (var it = customerStateStore.all()) {
+
+
+                long startLoop = Instant.now().toEpochMilli();
+                while (it.hasNext()) {
+
+                    var next = it.next();
+                    var randomNumber = R.nextInt(100);
+                    if (randomNumber == 42) {
+                        customerStateStore.delete(next.key);
+                        nbEntryDeleted++;
+                    }
+
+                    if (randomNumber == 0) {
+                        CustomerTravelRequest request = DataGenerator.generateCustomerTravelRequestData();
+                        request.setHugeDummyData(generateDummyData(R, 10));
+
+                        int nextInt = R.nextInt(1_000);
+                        request.setDepartureLocation(Integer.toString(R.nextInt(10_000_000) + 10_000_000));
+                        request.setArrivalLocation(Integer.toString(R.nextInt(50_000_000) + 10_000_000));
+                        if (nextInt < 10) {
+                            customerStateStore.put("DELETE#" + request.getDepartureLocation() + "#" + request.getArrivalLocation(), request);
+                            nbDeleteEntryAdded++;
+                        } else {
+                            customerStateStore.put(request.getDepartureLocation() + "#" + request.getArrivalLocation(), request);
+                            nbEntryAdded++;
+                        }
+                    }
+                }
+                log.info("deleted " + nbEntryDeleted + " entries, added " + nbEntryAdded + ", marked for deletion " + nbDeleteEntryAdded);
+                long loopTime = Instant.now().toEpochMilli() - startLoop / 1000;
+
+                log.info("loop took " + loopTime + " seconds");
+
+                var nowTestPrefix = Instant.now();
+                long start = nowTestPrefix.getEpochSecond() * 1_000_000 + nowTestPrefix.getNano() / 1_000;
+                try (KeyValueIterator<String, CustomerTravelRequest> iterator =
+                             customerStateStore.prefixScan("DELETE#", Serdes.String().serializer())) {
+                    Instant prefixNow = Instant.now();
+                    long prefixScanTime = prefixNow.getEpochSecond() * 1_000_000 + prefixNow.getNano() / 1_000 - start;
+                    totalTime += prefixScanTime;
+
+                    if (iterator.hasNext()) {
+                        log.info("{} entries in store -- prefix scan took {} μs -- first key : {}", customerStateStore.approximateNumEntries(), prefixScanTime, iterator.next().key);
+                    }
+                }
+            }
+
+
+        }
+    }
+
+
+    private String getMetricValue(String name) {
+        return testDriver.metrics().entrySet().stream().filter(metricEntry -> metricEntry.getKey().name().equals(name) && metricEntry.getKey().tags().containsValue("earlyRequestStateStore")).findFirst().get().getValue().metricValue().toString();
+    }
+
+    private List<?> getMetricByName(String name) {
+        return testDriver.metrics().entrySet().stream().filter(metricEntry -> metricEntry.getKey().name().equals(name) && metricEntry.getKey().tags().containsValue("earlyRequestStateStore")).map(entry -> entry.getValue()).collect(Collectors.toList());
     }
 
     private String generateDummyData(Random R, int count) {
