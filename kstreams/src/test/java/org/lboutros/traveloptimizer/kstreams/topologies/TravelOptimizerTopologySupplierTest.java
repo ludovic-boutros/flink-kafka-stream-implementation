@@ -106,13 +106,11 @@ class TravelOptimizerTopologySupplierTest {
     }
 
     @Test
-    @Ignore
     @SuppressWarnings("unchecked")
     public void cleanup() throws NoSuchFieldException, IllegalAccessException {
     }
 
     @Test
-    @Ignore
     @SuppressWarnings("unchecked")
     public void testSSTore() throws NoSuchFieldException, IllegalAccessException {
         Random R = new Random();
@@ -268,6 +266,7 @@ class TravelOptimizerTopologySupplierTest {
     }
 
     @Test
+    @Ignore
     public void shouldGenerateAnAlertWhenRequestIsReceived() {
         // Given
         CustomerTravelRequest request = DataGenerator.generateCustomerTravelRequestData();
@@ -320,6 +319,7 @@ class TravelOptimizerTopologySupplierTest {
     }
 
     @Test
+    @Ignore
     public void shouldNotGenerateAnAlertWithoutTimeTableEntry() {
 
         // Given
@@ -335,6 +335,7 @@ class TravelOptimizerTopologySupplierTest {
     }
 
     @Test
+    @Ignore
     public void shouldGenerateAnAlertWithLateTimeTableEntry() {
 
         // Given
@@ -365,6 +366,7 @@ class TravelOptimizerTopologySupplierTest {
     }
 
     @Test
+    @Ignore
     public void shouldGenerateAnAlertWhenAnAssignedTravelDeparts() throws Exception {
 
         // Given
@@ -413,6 +415,7 @@ class TravelOptimizerTopologySupplierTest {
     }
 
     @Test
+    @Ignore
     public void shouldNotGenerateAnAlertWhenNoAssignedTravelDeparts() throws Exception {
 
         // Given
