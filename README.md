@@ -124,7 +124,4 @@ flink run -c org.lboutros.traveloptimizer.flink.jobs.TravelOptimizerJob target/f
 
 ## Backlog
 
-This project is under-construction, the remaining identified steps are :
-
-- Implement the equivalent use-case with Apache Kafka® Streams
 - Implement a more complex efficiency logic to validate the business logic scalability of our designs
