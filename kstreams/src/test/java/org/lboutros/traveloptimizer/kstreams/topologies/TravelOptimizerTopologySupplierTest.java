@@ -127,10 +127,10 @@ class TravelOptimizerTopologySupplierTest {
         int totalTime = 0;
 
 
-        // Insert 100M entries in the state
+        // Insert 2M entries in the state
         for (int i = 0; i < 2_000_000; i++) {
             CustomerTravelRequest request = DataGenerator.generateCustomerTravelRequestData();
-            request.setHugeDummyData(generateDummyData(R, 10));
+            request.setHugeDummyData(generateDummyData(R, 20));
 
             int nextInt = R.nextInt(1_000);
             request.setDepartureLocation(Integer.toString(R.nextInt(10_000_000) + 10_000_000));
@@ -157,21 +157,21 @@ class TravelOptimizerTopologySupplierTest {
 
             // When
             Instant now = Instant.now();
-            long start = now.getEpochSecond() * 1_000_000 + now.getNano() / 1_000;
+            long start = System.nanoTime();
             List<String> keys = new ArrayList<>();
             try (KeyValueIterator<String, CustomerTravelRequest> iterator =
                          customerStateStore.prefixScan("DELETE#", Serdes.String().serializer())) {
-                Instant prefixNow = Instant.now();
-                long prefixScanTime = prefixNow.getEpochSecond() * 1_000_000 + prefixNow.getNano() / 1_000 - start;
+                var prefixNow = System.nanoTime();
+                long prefixScanTime = prefixNow - start;
                 totalTime += prefixScanTime;
                 if (i % 100_000 == 0) {
                     while (iterator.hasNext() && keys.size() < 300) {
                         keys.add(iterator.next().key);
                     }
                     if (iterator.hasNext()) {
-                        log.info("{}: {} entries: {} μs: {}", i, customerStateStore.approximateNumEntries(), prefixScanTime, iterator.next().key);
+                        log.info("{}: {} entries: {} ns: {}", i, customerStateStore.approximateNumEntries(), prefixScanTime, iterator.next().key);
                     }
-                    log.info("{}: {} entries: Average time: {} μs", i, customerStateStore.approximateNumEntries(), ((double) totalTime) / i);
+                    log.info("{}: {} entries: Average time: {} ns", i, customerStateStore.approximateNumEntries(), ((double) totalTime) / i);
                 }
             }
 
