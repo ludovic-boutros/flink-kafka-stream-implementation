@@ -17,6 +17,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.lboutros.traveloptimizer.kstreams.configuration.Constants;
+import org.lboutros.traveloptimizer.kstreams.topologies.processor.BasicProcessor;
 import org.lboutros.traveloptimizer.model.CustomerTravelRequest;
 import org.lboutros.traveloptimizer.model.generator.DataGenerator;
 
@@ -29,7 +30,7 @@ import java.util.Random;
 
 import static java.lang.System.currentTimeMillis;
 import static java.lang.System.nanoTime;
-import static org.lboutros.traveloptimizer.kstreams.configuration.Constants.StateStores.EARLY_REQUESTS_STATE_STORE;
+import static org.lboutros.traveloptimizer.kstreams.configuration.Constants.StateStores.A_STORE_NAME;
 import static org.lboutros.traveloptimizer.kstreams.configuration.Utils.readConfiguration;
 
 @Slf4j
@@ -49,9 +50,10 @@ class RocksDBTest {
                         Serdes.String()
                 );
 
-        builder.stream("input", Consumed.with(Serdes.String(), Serdes.String()));
         builder.addStateStore(store);
-
+        
+        builder.stream("input", Consumed.with(Serdes.String(), Serdes.String()))
+                .process(BasicProcessor::new, A_STORE_NAME);
         return builder.build();
     }
 
@@ -78,13 +80,11 @@ class RocksDBTest {
     public void testSSTore() throws NoSuchFieldException, IllegalAccessException {
         Random R = new Random();
 
-        MeteredKeyValueStore<String, CustomerTravelRequest> customerStateStore = (MeteredKeyValueStore) testDriver.getKeyValueStore(EARLY_REQUESTS_STATE_STORE);
+        MeteredKeyValueStore<String, String> customerStateStore = (MeteredKeyValueStore) testDriver.getKeyValueStore(A_STORE_NAME);
 
         Field producerPrivateField = TopologyTestDriver.class.getDeclaredField("producer");
         producerPrivateField.setAccessible(true);
         MockProducer producer = (MockProducer) producerPrivateField.get(testDriver);
-
-        // Change log topic's name travel-optimizer-earlyRequestStateStore-changelog
 
         // Insert 2M entries in the state
         for (int i = 0; i < 2_000_000; i++) {
@@ -95,15 +95,12 @@ class RocksDBTest {
             request.setDepartureLocation(Integer.toString(R.nextInt(10_000_000) + 10_000_000));
             request.setArrivalLocation(Integer.toString(R.nextInt(50_000_000) + 10_000_000));
 
-
-            customerStateStore.put(request.getDepartureLocation() + "#" + request.getArrivalLocation(), request);
             if (nextInt < 10) {
                 // Set 1% random lines as delete prefixed ones
-                customerStateStore.put("DELETE#" + request.getDepartureLocation() + "#" + request.getArrivalLocation(), request);
+                customerStateStore.put("DELETE#" + Integer.toString(R.nextInt(10_000_000) + 10_000_000), generateDummyData(R, 100));
             } else {
-                customerStateStore.put(request.getDepartureLocation() + "#" + request.getArrivalLocation(), request);
+                customerStateStore.put(Integer.toString(R.nextInt(10_000_000) + 10_000_000), generateDummyData(R, 100));
             }
-
 
             if (i % 100_000 == 0) {
 
@@ -113,7 +110,7 @@ class RocksDBTest {
                 // When
                 long start = nanoTime();
                 List<String> keys = new ArrayList<>();
-                try (KeyValueIterator<String, CustomerTravelRequest> iterator = customerStateStore.prefixScan("DELETE#", Serdes.String().serializer())) {
+                try (KeyValueIterator<String, String> iterator = customerStateStore.prefixScan("DELETE#", Serdes.String().serializer())) {
                     var prefixNow = nanoTime();
                     long prefixScanTime = prefixNow - start;
                     while (iterator.hasNext() && keys.size() < 300) {
@@ -165,10 +162,10 @@ class RocksDBTest {
                         request.setDepartureLocation(Integer.toString(R.nextInt(10_000_000) + 10_000_000));
                         request.setArrivalLocation(Integer.toString(R.nextInt(50_000_000) + 10_000_000));
                         if (nextInt < 10) {
-                            customerStateStore.put("DELETE#" + request.getDepartureLocation() + "#" + request.getArrivalLocation(), request);
+                            customerStateStore.put("DELETE#" + Integer.toString(R.nextInt(10_000_000) + 10_000_000), generateDummyData(R, 10));
                             nbDeleteEntryAdded++;
                         } else {
-                            customerStateStore.put(request.getDepartureLocation() + "#" + request.getArrivalLocation(), request);
+                            customerStateStore.put(Integer.toString(R.nextInt(10_000_000) + 10_000_000), generateDummyData(R, 10));
                             nbEntryAdded++;
                         }
                     }
@@ -179,7 +176,7 @@ class RocksDBTest {
                 log.info("Full scan loop took " + loopTime + " ms");
 
                 long start = System.nanoTime();
-                try (KeyValueIterator<String, CustomerTravelRequest> iterator = customerStateStore.prefixScan("DELETE#", Serdes.String().serializer())) {
+                try (KeyValueIterator<String, String> iterator = customerStateStore.prefixScan("DELETE#", Serdes.String().serializer())) {
                     long prefixScanTime = System.nanoTime() - start;
 
                     if (iterator.hasNext()) {
@@ -188,8 +185,6 @@ class RocksDBTest {
                 }
             }
         }
-
-
     }
 
     private String generateDummyData(Random R, int count) {
