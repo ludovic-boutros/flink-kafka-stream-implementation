@@ -17,6 +17,7 @@ public interface Constants {
         String AVAILABLE_CONNECTIONS_STATE_STORE = "availableConnectionStateStore";
         String LAST_REQUEST_ALERT_STATE_STORE = "lastRequestAlertStateStore";
         String EARLY_REQUESTS_STATE_STORE = "earlyRequestStateStore";
+        String A_STORE_NAME = "aStoreName";
     }
 
     interface InternalTopics {
@@ -74,5 +75,6 @@ public interface Constants {
                 };
             }
         };
+
     }
 }

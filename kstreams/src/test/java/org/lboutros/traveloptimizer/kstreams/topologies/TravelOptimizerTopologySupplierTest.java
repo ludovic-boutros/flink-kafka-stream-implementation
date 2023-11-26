@@ -2,14 +2,11 @@ package org.lboutros.traveloptimizer.kstreams.topologies;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.configuration2.ex.ConfigurationException;
-import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.internals.MeteredKeyValueStore;
 import org.junit.Ignore;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,15 +16,15 @@ import org.lboutros.traveloptimizer.kstreams.configuration.Constants;
 import org.lboutros.traveloptimizer.model.*;
 import org.lboutros.traveloptimizer.model.generator.DataGenerator;
 
-import java.lang.reflect.Field;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.lboutros.traveloptimizer.kstreams.configuration.Constants.StateStores.EARLY_REQUESTS_STATE_STORE;
 import static org.lboutros.traveloptimizer.kstreams.configuration.Utils.readConfiguration;
 import static org.lboutros.traveloptimizer.kstreams.configuration.Utils.toMap;
 import static org.lboutros.traveloptimizer.model.TravelAlert.ReasonCodes.DEPARTED;
@@ -66,38 +63,15 @@ class TravelOptimizerTopologySupplierTest {
 
 
         // Setup test topics
-        trainTimeTableUpdateInputTopic = testDriver.createInputTopic(GlobalConstants.Topics.TRAIN_TIME_UPDATE_TOPIC,
-                keySerde.serializer(),
-                Constants.Serdes.TRAIN_TIME_UPDATE_SERDE.serializer(),
-                Instant.EPOCH,
-                Duration.ZERO
-        );
+        trainTimeTableUpdateInputTopic = testDriver.createInputTopic(GlobalConstants.Topics.TRAIN_TIME_UPDATE_TOPIC, keySerde.serializer(), Constants.Serdes.TRAIN_TIME_UPDATE_SERDE.serializer(), Instant.EPOCH, Duration.ZERO);
 
-        planeTimeTableUpdateInputTopic = testDriver.createInputTopic(GlobalConstants.Topics.PLANE_TIME_UPDATE_TOPIC,
-                keySerde.serializer(),
-                Constants.Serdes.PLANE_TIME_UPDATE_SERDE.serializer(),
-                Instant.EPOCH,
-                Duration.ZERO
-        );
+        planeTimeTableUpdateInputTopic = testDriver.createInputTopic(GlobalConstants.Topics.PLANE_TIME_UPDATE_TOPIC, keySerde.serializer(), Constants.Serdes.PLANE_TIME_UPDATE_SERDE.serializer(), Instant.EPOCH, Duration.ZERO);
 
-        customerTravelRequestInputTopic = testDriver.createInputTopic(GlobalConstants.Topics.CUSTOMER_TRAVEL_REQUEST_TOPIC,
-                keySerde.serializer(),
-                Constants.Serdes.CUSTOMER_TRAVEL_REQUEST_SERDE.serializer(),
-                Instant.EPOCH,
-                Duration.ZERO
-        );
+        customerTravelRequestInputTopic = testDriver.createInputTopic(GlobalConstants.Topics.CUSTOMER_TRAVEL_REQUEST_TOPIC, keySerde.serializer(), Constants.Serdes.CUSTOMER_TRAVEL_REQUEST_SERDE.serializer(), Instant.EPOCH, Duration.ZERO);
 
-        departureInputTopic = testDriver.createInputTopic(GlobalConstants.Topics.DEPARTURE_TOPIC,
-                keySerde.serializer(),
-                Constants.Serdes.DEPARTURE_SERDE.serializer(),
-                Instant.EPOCH,
-                Duration.ZERO
-        );
+        departureInputTopic = testDriver.createInputTopic(GlobalConstants.Topics.DEPARTURE_TOPIC, keySerde.serializer(), Constants.Serdes.DEPARTURE_SERDE.serializer(), Instant.EPOCH, Duration.ZERO);
 
-        travelAlertOutputTopic = testDriver.createOutputTopic(GlobalConstants.Topics.TRAVEL_ALERTS_TOPIC,
-                keySerde.deserializer(),
-                Constants.Serdes.TRAVEL_ALERTS_SERDE.deserializer()
-        );
+        travelAlertOutputTopic = testDriver.createOutputTopic(GlobalConstants.Topics.TRAVEL_ALERTS_TOPIC, keySerde.deserializer(), Constants.Serdes.TRAVEL_ALERTS_SERDE.deserializer());
     }
 
     @AfterEach
@@ -105,165 +79,6 @@ class TravelOptimizerTopologySupplierTest {
         testDriver.close();
     }
 
-    @Test
-    @SuppressWarnings("unchecked")
-    public void cleanup() throws NoSuchFieldException, IllegalAccessException {
-    }
-
-    @Test
-    @SuppressWarnings("unchecked")
-    public void testSSTore() throws NoSuchFieldException, IllegalAccessException {
-        Random R = new Random();
-
-        MeteredKeyValueStore<String, CustomerTravelRequest> customerStateStore =
-                (MeteredKeyValueStore) testDriver.getKeyValueStore(EARLY_REQUESTS_STATE_STORE);
-
-        Field producerPrivateField = TopologyTestDriver.class.getDeclaredField("producer");
-        producerPrivateField.setAccessible(true);
-        MockProducer producer = (MockProducer) producerPrivateField.get(testDriver);
-
-        // Change log topic's name travel-optimizer-earlyRequestStateStore-changelog
-
-        int totalTime = 0;
-
-
-        // Insert 2M entries in the state
-        for (int i = 0; i < 2_000_000; i++) {
-            CustomerTravelRequest request = DataGenerator.generateCustomerTravelRequestData();
-            request.setHugeDummyData(generateDummyData(R, 20));
-
-            int nextInt = R.nextInt(1_000);
-            request.setDepartureLocation(Integer.toString(R.nextInt(10_000_000) + 10_000_000));
-            request.setArrivalLocation(Integer.toString(R.nextInt(50_000_000) + 10_000_000));
-            customerStateStore.put(request.getDepartureLocation() + "#" + request.getArrivalLocation(), request);
-            if (nextInt < 10) {
-                customerStateStore.put("DELETE#" + request.getDepartureLocation() + "#" + request.getArrivalLocation(), request);
-            }
-
-            if (i % 1_000 != 0) {
-                // Key is quite long and random
-                customerStateStore.put(request.getDepartureLocation() + "#" + request.getArrivalLocation(), request);
-            } else {
-                // One out of 1000 is a DELETED prefix entry
-                customerStateStore.put("DELETED#" + request.getDepartureLocation() + "#" + request.getArrivalLocation(), request);
-            }
-
-            if (i % 100_000 == 0) {
-                log.info("FluuuuuuussssSSSSH !");
-                customerStateStore.flush();
-                customerStateStore.flushCache();
-                producer.clear();
-            }
-
-            // When
-            Instant now = Instant.now();
-            long start = System.nanoTime();
-            List<String> keys = new ArrayList<>();
-            try (KeyValueIterator<String, CustomerTravelRequest> iterator =
-                         customerStateStore.prefixScan("DELETE#", Serdes.String().serializer())) {
-                var prefixNow = System.nanoTime();
-                long prefixScanTime = prefixNow - start;
-                totalTime += prefixScanTime;
-                if (i % 100_000 == 0) {
-                    while (iterator.hasNext() && keys.size() < 300) {
-                        keys.add(iterator.next().key);
-                    }
-                    if (iterator.hasNext()) {
-                        log.info("{}: {} entries: {} ns: {}", i, customerStateStore.approximateNumEntries(), prefixScanTime, iterator.next().key);
-                    }
-                    log.info("{}: {} entries: Average time: {} ns", i, customerStateStore.approximateNumEntries(), ((double) totalTime) / i);
-                }
-            }
-
-            if (!keys.isEmpty()) {
-                log.info("Deleting {} keys...", keys.size());
-                keys.forEach(customerStateStore::delete);
-                log.info("Deleting done.");
-
-/*
-                log.info("memtable-hit-ratio - " + getMetricValue("memtable-hit-ratio"));
-                log.info("block-cache-data-hit-ratio - " + getMetricValue("block-cache-data-hit-ratio"));
-                log.info("block-cache-index - " + getMetricValue("block-cache-index-hit-ratio"));
-                log.info("block-cache-filter - " + getMetricValue("block-cache-filter-hit-ratio"));
-*/
-            }
-        }
-
-
-        while (customerStateStore.approximateNumEntries() > 1000) {
-            int nbEntryDeleted = 0;
-            int nbEntryAdded = 0;
-            int nbDeleteEntryAdded = 0;
-
-            try (var it = customerStateStore.all()) {
-
-
-                long startLoop = Instant.now().toEpochMilli();
-                while (it.hasNext()) {
-
-                    var next = it.next();
-                    var randomNumber = R.nextInt(100);
-                    if (randomNumber == 42) {
-                        customerStateStore.delete(next.key);
-                        nbEntryDeleted++;
-                    }
-
-                    if (randomNumber == 0) {
-                        CustomerTravelRequest request = DataGenerator.generateCustomerTravelRequestData();
-                        request.setHugeDummyData(generateDummyData(R, 10));
-
-                        int nextInt = R.nextInt(1_000);
-                        request.setDepartureLocation(Integer.toString(R.nextInt(10_000_000) + 10_000_000));
-                        request.setArrivalLocation(Integer.toString(R.nextInt(50_000_000) + 10_000_000));
-                        if (nextInt < 10) {
-                            customerStateStore.put("DELETE#" + request.getDepartureLocation() + "#" + request.getArrivalLocation(), request);
-                            nbDeleteEntryAdded++;
-                        } else {
-                            customerStateStore.put(request.getDepartureLocation() + "#" + request.getArrivalLocation(), request);
-                            nbEntryAdded++;
-                        }
-                    }
-                }
-                log.info("deleted " + nbEntryDeleted + " entries, added " + nbEntryAdded + ", marked for deletion " + nbDeleteEntryAdded);
-                long loopTime = Instant.now().toEpochMilli() - startLoop / 1000;
-
-                log.info("loop took " + loopTime + " seconds");
-
-                var nowTestPrefix = Instant.now();
-                long start = nowTestPrefix.getEpochSecond() * 1_000_000 + nowTestPrefix.getNano() / 1_000;
-                try (KeyValueIterator<String, CustomerTravelRequest> iterator =
-                             customerStateStore.prefixScan("DELETE#", Serdes.String().serializer())) {
-                    Instant prefixNow = Instant.now();
-                    long prefixScanTime = prefixNow.getEpochSecond() * 1_000_000 + prefixNow.getNano() / 1_000 - start;
-                    totalTime += prefixScanTime;
-
-                    if (iterator.hasNext()) {
-                        log.info("{} entries in store -- prefix scan took {} μs -- first key : {}", customerStateStore.approximateNumEntries(), prefixScanTime, iterator.next().key);
-                    }
-                }
-            }
-
-
-        }
-    }
-
-
-    private String getMetricValue(String name) {
-        return testDriver.metrics().entrySet().stream().filter(metricEntry -> metricEntry.getKey().name().equals(name) && metricEntry.getKey().tags().containsValue("earlyRequestStateStore")).findFirst().get().getValue().metricValue().toString();
-    }
-
-    private List<?> getMetricByName(String name) {
-        return testDriver.metrics().entrySet().stream().filter(metricEntry -> metricEntry.getKey().name().equals(name) && metricEntry.getKey().tags().containsValue("earlyRequestStateStore")).map(entry -> entry.getValue()).collect(Collectors.toList());
-    }
-
-    private String generateDummyData(Random R, int count) {
-        StringBuilder builder = new StringBuilder();
-
-        for (int i = 0; i < count; i++) {
-            builder.append(R.nextInt(256));
-        }
-        return builder.toString();
-    }
 
     @Test
     @Ignore
@@ -410,8 +225,7 @@ class TravelOptimizerTopologySupplierTest {
         departureInputTopic.pipeInput(departure.getId(), departure);
 
         // Then
-        assertContains(travelAlertOutputTopic.readValuesToList(),
-                List.of(expectedTrainUpdateAlert, expectedDepartedAlert));
+        assertContains(travelAlertOutputTopic.readValuesToList(), List.of(expectedTrainUpdateAlert, expectedDepartedAlert));
     }
 
     @Test
@@ -433,8 +247,7 @@ class TravelOptimizerTopologySupplierTest {
         departureInputTopic.pipeInput(departure.getId(), departure);
 
         // Then
-        assertContains(travelAlertOutputTopic.readValuesToList(),
-                List.of());
+        assertContains(travelAlertOutputTopic.readValuesToList(), List.of());
     }
 
     @Test
@@ -446,7 +259,6 @@ class TravelOptimizerTopologySupplierTest {
         departureInputTopic.pipeInput(departure.getId(), departure);
 
         // Then
-        assertContains(travelAlertOutputTopic.readValuesToList(),
-                List.of());
+        assertContains(travelAlertOutputTopic.readValuesToList(), List.of());
     }
 }
